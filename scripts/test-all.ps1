@@ -20,6 +20,7 @@ Invoke-Step "contracts: lint"    { npm --prefix contracts run lint }
 Invoke-Step "contracts: test"    { npm --prefix contracts run test }
 
 Invoke-Step "backend: ruff"      { & backend\.venv\Scripts\python.exe -m ruff check backend }
+Invoke-Step "backend: format"    { Push-Location backend; & .venv\Scripts\python.exe -m ruff format --check .; $code = $LASTEXITCODE; Pop-Location; $global:LASTEXITCODE = $code }
 Invoke-Step "backend: mypy"      { Push-Location backend; & .venv\Scripts\python.exe -m mypy; $code = $LASTEXITCODE; Pop-Location; $global:LASTEXITCODE = $code }
 Invoke-Step "backend: pytest"    { Push-Location backend; & .venv\Scripts\python.exe -m pytest -q; $code = $LASTEXITCODE; Pop-Location; $global:LASTEXITCODE = $code }
 

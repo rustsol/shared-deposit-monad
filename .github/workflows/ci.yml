@@ -33,6 +33,26 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      # mysql:8.4 is the current LTS tag; the schema (utf8mb4, DATETIME(6),
+      # JSON, DECIMAL(65,0), CHECK-free InnoDB) is compatible with 8.0+ and the
+      # local WAMP 9.1 server. The password below is CI-container-only, never
+      # blank, and never a production credential.
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-root-pw
+          MYSQL_DATABASE: shared_deposit_ci
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-root-pw"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: mysql+pymysql://root:ci-only-root-pw@127.0.0.1:3306/shared_deposit_ci?charset=utf8mb4
+      TEST_DATABASE_URL: mysql+pymysql://root:ci-only-root-pw@127.0.0.1:3306/shared_deposit_ci_test?charset=utf8mb4
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,7 +61,13 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
       - run: ruff check .
+      - run: ruff format --check .
       - run: mypy
+      - name: Migrate application database and verify head
+        run: |
+          python -m app.database.setup
+          python -m alembic upgrade head
+          python -m alembic current | grep "(head)"
       - run: pytest -q
 
   frontend:

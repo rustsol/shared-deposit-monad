@@ -174,3 +174,48 @@ No deployment to any network; no private keys requested, generated, or used (loc
 ### Next phase
 
 Phase 4 — backend foundation and MySQL (typed config, SQLAlchemy engine, Alembic initial migration, wallet-signature auth, canonical hashing, drafts, health endpoint), pending explicit approval.
+
+---
+
+## 2026-07-14 (Phase 3 milestone tag + Phase 4): backend database foundation
+
+### Milestone tag
+
+Annotated tag `v0.1.0-contract-local` ("Shared Deposit contract complete and locally verified") created on `a03f948` and pushed; verified locally and on the remote (tag object `e5c1073` dereferences to `a03f948`). No branch or commit was modified.
+
+### Dependency verification (Phase 1 pins — no upgrades needed)
+
+Installed and compatible: Python 3.11.7, FastAPI 0.139.0, pydantic 2.13.4, pydantic-settings 2.14.2, SQLAlchemy 2.0.51, Alembic 1.18.5, PyMySQL 1.2.0, web3 7.16.0, eth-account 0.13.7, ruff 0.15.21, mypy 2.3.0, pytest 9.1.1. Additions (declared in pyproject): `eth-utils>=4` + `eth-hash[pycryptodome]>=0.7` (previously transitive via web3, now explicit because the canonical hashing imports them directly — Ethereum Keccak-256, correctness verified against the known keccak256("abc") digest) and `types-PyMySQL` (dev, mypy strict stubs).
+
+### Implemented
+
+- **Config** (`app/config.py`): pydantic-settings, secrets in `SecretStr` (redacted in repr/str), URL scheme validation (mysql+pymysql only — SQLite/MariaDB substitutes rejected), chain-ID/origin validation, hosted-safety rules (root user, blank password, blank session secret, non-HTTPS origin all rejected outside development/test). No DB connection at import (subprocess-tested with an unroutable RFC 5737 address).
+- **Database package** (`app/database/`): declarative base with deterministic naming conventions; lazy engine (`pool_pre_ping`, recycle 1800s); one-session-per-request lifecycle with rollback-on-error; `python -m app.database.setup` (PyMySQL-based, MySQL CLI not required; create-if-missing only, `--check` mode, repeat-safe, never drops/seeds); readiness checks (SELECT 1, selected database, Alembic revision vs head).
+- **Per-connection strict SQL mode**: the local WAMP MySQL 9.1 server runs with a **blank sql_mode** (discovered by failing tests — negatives were clamped and overlong strings truncated silently). Every application/test connection now sets `STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO` via `init_command`, so financial data can never be silently altered regardless of server defaults. The server's global configuration was not touched.
+- **Models**: all 15 documented tables (docs/02 §5.4) in 8 modules; wei as `DECIMAL(65,0)`; addresses `CHAR(42)`/hashes `CHAR(66)`/token hashes `CHAR(64)` with `ascii_bin`; `DATETIME(6)` UTC; InnoDB/utf8mb4; unique event identity `(chain_id, contract_address, tx_hash, log_index)`; cache tables named with `status_cache`; hash-only token columns. Documented schema addition: `invitations.revoked_at` (backs the approved rotation/revocation protections; the doc table listed only `used_at`).
+- **Alembic**: URL from validated settings (no credentials in alembic.ini); initial migration `34260d5be01a` ("initial documented schema") creating all 15 tables; downgrade hand-adjusted to drop tables in FK-safe dependency order (MySQL refuses to drop an index that backs a foreign key — found by the round-trip test).
+- **Endpoints**: `GET /api/v1/health` (process facts only) and `GET /api/v1/readiness` (real checks, 503 when not ready, no secret/SQL/traceback leakage).
+- **Canonical hashing**: closed-schema terms model (floats, negatives, extra fields, duplicate tenants, wrong thresholds all rejected), deterministic JSON (sorted keys, compact, UTF-8, lowercase addresses), Keccak-256. **Golden vector cross-verified: the Python canonical text and hash `0x14a430dc…5446` are byte-identical to an independent viem (frontend toolchain) implementation.** Reason hashing: NFC + CRLF→LF + outer trim, empty rejected, keccak≠sha3-256 asserted.
+
+### Local database state
+
+`shared_deposit` created on WAMP MySQL **9.1.0** (utf8mb4/utf8mb4_unicode_ci), migrated to head `34260d5be01a`, 15 tables + alembic_version, **zero rows in every table** (no seeds). Setup command verified repeat-safe and check-only.
+
+### Validation (all commands actually run)
+
+- `ruff check` clean; `ruff format --check` clean (39 files); `mypy` strict: no issues in 28 source files
+- `pytest`: **86 passed, 0 failed** against real MySQL (canonical terms 24, config 16, database setup 3, migrations 8, models/constraints 20, readiness 7, reason hashing 7, smoke 1 — parametrized cases included)
+- Migration round-trip in guarded `shared_deposit_test`: head → base → head → head, all 15 tables verified with indexes, FKs, unique constraints; DECIMAL(65,0) exact round-trip at 10^60+7 and 2^128−1; negative wei and overlong addresses rejected under strict mode; duplicate event identity rejected, different log_index accepted
+- Test-database guard: destructive operations require a `*_test` name; `shared_deposit` is never dropped or truncated by tests
+
+### CI MySQL choice
+
+`mysql:8.4` official image — current LTS tag; schema requires only 8.0+ features (utf8mb4, DATETIME(6), JSON, DECIMAL(65,0)); local server is 9.1, CI on LTS keeps the matrix honest without chasing innovation releases. CI-only root password lives in workflow env (never blank, no repository secrets needed); CI migrates `shared_deposit_ci`, verifies `alembic current` is at head, then runs the full suite with `shared_deposit_ci_test` as the guarded test database.
+
+### Explicitly not done in Phase 4
+
+No auth endpoints, invitations, evidence upload, agreement/claim APIs, RPC access, event worker, frontend flows, deployment, private keys, or demo data. Monad RPC was never contacted.
+
+### Next phase
+
+Phase 5 — evidence storage and event indexing (per docs/03), pending explicit approval.
