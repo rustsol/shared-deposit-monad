@@ -82,3 +82,46 @@ Workspace configuration, lockfiles, a bare FastAPI instance, a placeholder front
 ### Next phase
 
 Phase 2 — contract funding lifecycle (`SharedDepositEscrow.sol` creation/acceptance/funding + tests), pending explicit approval.
+
+---
+
+## 2026-07-14 (Phase 2): contract funding lifecycle
+
+### Implemented (commit `e973f97` + this commit)
+
+`contracts/contracts/SharedDepositEscrow.sol` — agreement creation (full validation, recomputed totals, sequential IDs starting at 1), tenant/recipient acceptance against the exact stored terms hash, partial funding with overfunding prevention, automatic activation on the final qualifying acceptance or deposit, pre-activation withdrawal, participant-only expiry cancellation, cancelled-funding withdrawal with the approved historical-accounting model (`fundedAmount`/`totalFunded` never decreased; `cancelledFundingWithdrawnAmount`, `cancelledFundingWithdrawn`, `totalCancelledFundingWithdrawn` recorded), documented views, and `receive`/`fallback` rejection. No owner/admin/fee/rescue/upgrade path exists; the deployer has no special authority (asserted by tests at the ABI level). OpenZeppelin `ReentrancyGuard` + checks-effects-interactions on both withdrawal functions. Claim/settlement storage fields exist (documented) so the storage layout is final, but no claim logic is implemented.
+
+Documented additions to the canonical minimum error list: `TenantNotAccepted` (deposit before acceptance), `NotParticipant` (non-participant cancellation attempt). Documented decision: agreement IDs start at 1 so ID 0 is never valid.
+
+`contracts/contracts/test/TenantProxy.sol` — test-only fixture enabling malicious-receiver and reentrancy scenarios; not part of the product.
+
+### Validation (all commands actually run)
+
+- `npm run lint` (prettier incl. Solidity): exit 0
+- `npm run compile`: "Compiled 2 Solidity files successfully (evm target: prague)" (solc 0.8.28, optimizer 200, ipfs metadata — unchanged Phase 1 settings)
+- `npm run typecheck` (tsc strict incl. generated artifact types): exit 0
+- `npx hardhat test`: **75 passing** (agreement.lifecycle 47, withdrawals.security 27, invariants.property 1 covering 20 seeded randomized scenarios), 0 failing, 0 skipped, no `.only`
+- Secret scan over changed files: no key material; no `.env` files exist; no deployment artifacts committed
+- Note: one stack-too-deep compiler error during development was resolved by extracting `_registerTenants` (no `viaIR` change); one property-test scenario generator bug (non-completing scenarios could accidentally fully fund and legitimately activate) was fixed in the test, not the contract
+
+### Local gas estimates (Hardhat network only — NOT testnet measurements)
+
+| Operation | Gas |
+|---|---|
+| deploy SharedDepositEscrow | 1,957,285 |
+| createAgreement (2 tenants) | 349,136 |
+| acceptAsTenant | 35,916 |
+| acceptAsRecipient | 44,918 |
+| deposit (partial) | 47,218 |
+| deposit (final, triggers activation) | 58,889 |
+| withdrawFundingBeforeActivation | 48,911 |
+| cancelExpiredFunding | 32,572 |
+| withdrawCancelledFunding | 87,483 |
+
+### Explicitly not done in Phase 2
+
+No claims, voting, settlement, refunds, or recipient payout; no deployment to Monad Testnet or anywhere; no private keys requested, generated, or stored; no backend/DB/frontend changes; no CI changes.
+
+### Next phase
+
+Phase 3 — claims, voting, and settlement (with the approved largest-remainder allocation), pending explicit approval.

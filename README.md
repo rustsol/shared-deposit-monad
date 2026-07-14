@@ -49,7 +49,9 @@ The application never shows a success state without a real transaction receipt a
 
 ## Project status
 
-**Documentation and local environment validation only.** No application source code, dependencies, database schema, smart contract, or deployment exists yet. Financial logic is not implemented. Implementation follows the phased plan in [docs/03_IMPLEMENTATION_PLAN.md](docs/03_IMPLEMENTATION_PLAN.md).
+**Contract funding lifecycle implemented and tested locally.** `SharedDepositEscrow` currently covers agreement creation, terms acceptance, funding with automatic activation, pre-activation withdrawal, funding-expiry cancellation, and cancelled-funding withdrawal with historical accounting — verified by 75 passing Hardhat tests (including reentrancy, malicious-receiver, and randomized invariant tests) against local test signers only.
+
+Not implemented yet: claims, voting, settlement, refund/payout withdrawals, backend blockchain integration, database migrations, frontend product flows, and any deployment. **The contract is not deployed to any network and no wallet keys exist in this repository.** Implementation follows the phased plan in [docs/03_IMPLEMENTATION_PLAN.md](docs/03_IMPLEMENTATION_PLAN.md).
 
 ## License
 
