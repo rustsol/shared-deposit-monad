@@ -2,8 +2,9 @@
 // (credentials: 'include'); mutations carry the session-bound CSRF token in
 // a header. The CSRF value is kept only in memory — never in localStorage.
 
-const BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://127.0.0.1:8000/api/v1'
+// Same-origin in development (Vite proxies /api to the backend) so the
+// HttpOnly SameSite=Lax session cookie is always sent.
+const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'
 
 let csrfToken: string | null = null
 

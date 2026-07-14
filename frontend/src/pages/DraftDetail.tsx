@@ -200,6 +200,11 @@ export default function DraftDetail() {
           <button className="secondary" onClick={() => prepare.mutate()} disabled={prepare.isPending}>
             {prepare.isPending ? 'Preparing…' : 'Prepare & compare hashes'}
           </button>
+          {prepare.isError && (
+            <div className="notice error">
+              {prepare.error instanceof ApiError ? prepare.error.message : 'prepare failed'}
+            </div>
+          )}
           {prepared && (
             <dl className="kv small" style={{ marginTop: '0.75rem' }}>
               <dt>Backend hash</dt><dd className="mono">{prepared.termsHash}</dd>
