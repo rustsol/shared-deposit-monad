@@ -21,6 +21,9 @@ from sqlalchemy.orm import Session
 from alembic import command
 
 # Defaults for local WAMP development; CI overrides via environment variables.
+# APP_ENV=test disables live Monad RPC checks in readiness: automated tests
+# must never contact Monad Testnet.
+os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault(
     "DATABASE_URL", "mysql+pymysql://root:@127.0.0.1:3306/shared_deposit?charset=utf8mb4"
 )

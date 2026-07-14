@@ -18,7 +18,8 @@ def make(**values: str) -> Settings:
 
 
 def test_valid_local_configuration() -> None:
-    settings = make(DATABASE_URL=LOCAL_URL)
+    # conftest sets APP_ENV=test for the suite; pass development explicitly.
+    settings = make(DATABASE_URL=LOCAL_URL, APP_ENV="development")
     assert settings.app_env == "development"
     assert settings.chain_id == 10143
     assert settings.database_name == "shared_deposit"
