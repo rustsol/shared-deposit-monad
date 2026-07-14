@@ -1,0 +1,55 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Node
+node_modules/
+dist/
+coverage/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+
+# Hardhat
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+contracts/ignition/deployments/chain-31337/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# Evidence uploads (content-addressed user files, never committed)
+backend/storage/evidence/*
+!backend/storage/evidence/.gitkeep
+
+# Databases and dumps
+*.sqlite
+*.sql.gz
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
