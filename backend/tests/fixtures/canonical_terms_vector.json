@@ -1,0 +1,32 @@
+{
+  "_comment": "UNIT-TEST FIXTURE ONLY. These are synthetic addresses and values for hash verification; they do not represent any real onchain agreement. The expected hash was independently reproduced with viem keccak256 in the frontend toolchain on 2026-07-14.",
+  "input": {
+    "schemaVersion": "1.0",
+    "chainId": 10143,
+    "currency": "MON",
+    "creator": "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1",
+    "recipient": "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB2",
+    "propertyAlias": "Test Apartment Ünit 4",
+    "leaseStart": 1767225600,
+    "leaseEnd": 1798761600,
+    "fundingDeadline": 1769904000,
+    "claimDeadline": 1801353600,
+    "settlementDeadline": 1803945600,
+    "tenantContributions": [
+      {
+        "wallet": "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1",
+        "requiredAmountWei": "1500000000000000000"
+      },
+      {
+        "wallet": "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC3",
+        "requiredAmountWei": "2500000000000000001"
+      }
+    ],
+    "approvalRule": { "type": "STRICT_MAJORITY", "requiredApprovals": 2 },
+    "individualDeductionRule": "DEDUCT_FROM_LIABLE_TENANT_FIRST",
+    "sharedDeductionRule": "PROPORTIONAL_TO_REMAINING_BALANCE_AFTER_INDIVIDUAL_DEDUCTIONS",
+    "evidenceRequired": true
+  },
+  "canonical": "{\"approvalRule\":{\"requiredApprovals\":2,\"type\":\"STRICT_MAJORITY\"},\"chainId\":10143,\"claimDeadline\":1801353600,\"creator\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1\",\"currency\":\"MON\",\"evidenceRequired\":true,\"fundingDeadline\":1769904000,\"individualDeductionRule\":\"DEDUCT_FROM_LIABLE_TENANT_FIRST\",\"leaseEnd\":1798761600,\"leaseStart\":1767225600,\"propertyAlias\":\"Test Apartment Ünit 4\",\"recipient\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2\",\"schemaVersion\":\"1.0\",\"settlementDeadline\":1803945600,\"sharedDeductionRule\":\"PROPORTIONAL_TO_REMAINING_BALANCE_AFTER_INDIVIDUAL_DEDUCTIONS\",\"tenantContributions\":[{\"requiredAmountWei\":\"1500000000000000000\",\"wallet\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1\"},{\"requiredAmountWei\":\"2500000000000000001\",\"wallet\":\"0xccccccccccccccccccccccccccccccccccccccc3\"}]}",
+  "keccak256": "0x14a430dcd11421b8c95e7aca3f7c3a062cda665587885bfa95f93cb7015c5446"
+}
