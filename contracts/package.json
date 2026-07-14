@@ -1,0 +1,27 @@
+{
+  "name": "shared-deposit-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SharedDepositEscrow smart contract workspace (Hardhat, Monad)",
+  "license": "MIT",
+  "scripts": {
+    "precompile": "node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\"",
+    "compile": "hardhat compile",
+    "pretest": "node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\"",
+    "test": "hardhat test",
+    "lint": "prettier --check --no-error-on-unmatched-pattern \"contracts/**/*.sol\" \"test/**/*.ts\" \"ignition/**/*.ts\" hardhat.config.ts",
+    "format": "prettier --write --no-error-on-unmatched-pattern \"contracts/**/*.sol\" \"test/**/*.ts\" \"ignition/**/*.ts\" hardhat.config.ts",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition-viem": "^0.15.10",
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "hardhat": "^2.22.19",
+    "prettier": "^3.3.0",
+    "prettier-plugin-solidity": "^1.4.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

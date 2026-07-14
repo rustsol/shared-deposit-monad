@@ -1,0 +1,18 @@
+{
+  "name": "shared-deposit-monad",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared Deposit — wallet-based rental security-deposit escrow on Monad (root workspace scripts)",
+  "license": "MIT",
+  "scripts": {
+    "contracts:compile": "npm --prefix contracts run compile",
+    "contracts:test": "npm --prefix contracts run test",
+    "contracts:lint": "npm --prefix contracts run lint",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:lint": "npm --prefix frontend run lint",
+    "frontend:typecheck": "npm --prefix frontend run typecheck",
+    "frontend:test": "npm --prefix frontend run test",
+    "frontend:build": "npm --prefix frontend run build",
+    "test:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1"
+  }
+}
