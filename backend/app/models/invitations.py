@@ -36,5 +36,8 @@ class Invitation(Base):
     used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     # Rotation/revocation support per the approved token protections.
     revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    # Set when this invitation was replaced by rotation (revoked_at is also
+    # set); distinguishes "rotated" from a plain revocation in review states.
+    superseded_by: Mapped[str | None] = mapped_column(UuidChar, nullable=True)
     created_by: Mapped[str] = mapped_column(AddressChar, nullable=False)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)

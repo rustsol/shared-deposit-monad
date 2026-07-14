@@ -43,6 +43,10 @@ line-length = 100
 select = ["E", "F", "W", "I", "B", "UP", "S"]
 ignore = []
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom uses Depends(...) in defaults.
+extend-immutable-calls = ["fastapi.Depends"]
+
 [tool.ruff.lint.per-file-ignores]
 # S101: pytest uses assert. S105/S106: tests use literal fake secrets on
 # purpose. S608: test fixtures interpolate table/database names from fixed

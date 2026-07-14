@@ -44,6 +44,9 @@ class AuthSession(Base):
     wallet_address: Mapped[str] = mapped_column(AddressChar, nullable=False, index=True)
     # SHA-256 hex of the opaque session token; the raw cookie value is never stored.
     token_hash: Mapped[str] = mapped_column(Hash64Char, nullable=False, unique=True)
+    # SHA-256 hex of the session-bound CSRF token (double-submit design); the
+    # raw CSRF value is returned to the client once per issue and never stored.
+    csrf_token_hash: Mapped[str] = mapped_column(Hash64Char, nullable=False, server_default="")
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
     revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)

@@ -2,7 +2,10 @@
 error; writes require explicit commit."""
 
 from collections.abc import Iterator
+from typing import Any, cast
 
+from sqlalchemy import Executable
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database.engine import get_engine
@@ -19,6 +22,13 @@ def get_session_factory() -> sessionmaker[Session]:
             autoflush=False,
         )
     return _session_factory
+
+
+def execute_rowcount(session: Session, statement: Executable) -> int:
+    """Executes a DML statement and returns the affected-row count. Used for
+    atomic one-time state transitions (nonce consumption, invitation claim)."""
+    result = cast("CursorResult[Any]", session.execute(statement))
+    return int(result.rowcount)
 
 
 def get_db_session() -> Iterator[Session]:
