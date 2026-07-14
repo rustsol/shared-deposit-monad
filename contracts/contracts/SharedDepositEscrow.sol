@@ -95,6 +95,35 @@ contract SharedDepositEscrow is ReentrancyGuard {
         bool refundWithdrawn;
     }
 
+    enum ClaimType {
+        SHARED,
+        INDIVIDUAL
+    }
+
+    enum ClaimStatus {
+        NONE,
+        PENDING,
+        APPROVED,
+        REJECTED,
+        WITHDRAWN
+    }
+
+    /// @dev Claims store only public, non-private data: amounts, deterministic hashes,
+    ///      vote counts, and status. Plain-text reasons, evidence files, names, and any
+    ///      private metadata live offchain; only their hashes appear here. The claim
+    ///      amount, type, liable tenant, reason hash, and evidence hash are immutable
+    ///      after submission; there is no claim-editing function.
+    struct Claim {
+        address liableTenant;
+        bytes32 reasonHash;
+        bytes32 evidenceHash;
+        uint128 amount;
+        uint16 yesVotes;
+        uint16 noVotes;
+        ClaimType claimType;
+        ClaimStatus status;
+    }
+
     // ---------------------------------------------------------------------
     // Storage
     // ---------------------------------------------------------------------
@@ -106,6 +135,13 @@ contract SharedDepositEscrow is ReentrancyGuard {
     mapping(uint256 => Agreement) private agreements;
     mapping(uint256 => address[]) private agreementTenants;
     mapping(uint256 => mapping(address => Tenant)) private tenants;
+    /// @dev Claim IDs are sequential per agreement, starting at 1 (matching agreement
+    ///      IDs); ID 0 is never a valid claim. IDs are never reused: `claimCount` is a
+    ///      lifetime counter that never decreases, and a withdrawn claim keeps its ID
+    ///      and still counts toward MAX_CLAIMS.
+    mapping(uint256 => mapping(uint256 => Claim)) private claims;
+    /// @dev 0 = not voted, 1 = YES, 2 = NO. Votes are immutable once recorded.
+    mapping(uint256 => mapping(uint256 => mapping(address => uint8))) private votes;
 
     // ---------------------------------------------------------------------
     // Events
@@ -136,6 +172,26 @@ contract SharedDepositEscrow is ReentrancyGuard {
         uint128 amount
     );
 
+    event ClaimSubmitted(
+        uint256 indexed agreementId,
+        uint256 indexed claimId,
+        ClaimType claimType,
+        address indexed liableTenant,
+        uint128 amount,
+        bytes32 reasonHash,
+        bytes32 evidenceHash
+    );
+
+    event ClaimVoted(
+        uint256 indexed agreementId,
+        uint256 indexed claimId,
+        address indexed tenant,
+        bool support
+    );
+    event ClaimApproved(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
+    event ClaimRejected(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
+    event ClaimWithdrawn(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
+
     // ---------------------------------------------------------------------
     // Errors
     // ---------------------------------------------------------------------
@@ -164,6 +220,19 @@ contract SharedDepositEscrow is ReentrancyGuard {
     error FundingDeadlineNotPassed();
     error TermsMismatch();
     error Overfunding();
+    error ClaimWindowClosed();
+    error ClaimWindowNotOpen();
+    error MissingEvidence();
+    error ClaimExceedsAvailableDeposit();
+    error IndividualClaimExceedsTenantBalance();
+    error InvalidClaim();
+    /// @dev Addition to the documented minimum error list: the lifetime claim-ID limit
+    ///      (MAX_CLAIMS = 32, withdrawn claims included) has been reached.
+    error TooManyClaims();
+    error AlreadyVoted();
+    error VotingClosed();
+    error VotingStillOpen();
+    error UnresolvedClaimsRemain();
     error NothingToWithdraw();
     error AlreadyWithdrawn();
     error TransferFailed();
@@ -418,6 +487,166 @@ contract SharedDepositEscrow is ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------
+    // Claims
+    // ---------------------------------------------------------------------
+
+    /// @notice The recipient submits an evidence-backed deduction claim during the
+    ///         claim window (`leaseEnd <= now <= claimDeadline`). Only deterministic
+    ///         hashes of the reason and evidence manifest are stored; the readable
+    ///         reason and the files themselves stay offchain. No funds move here —
+    ///         the claim only reserves deposit capacity until it resolves.
+    ///
+    ///         Lifetime limit: at most MAX_CLAIMS (32) claim IDs may ever be created
+    ///         for one agreement. A withdrawn claim still consumes its claim ID and
+    ///         counts toward the limit; IDs are never reused.
+    function submitClaim(
+        uint256 agreementId,
+        ClaimType claimType,
+        address liableTenant,
+        uint128 amount,
+        bytes32 reasonHash,
+        bytes32 evidenceHash
+    ) external returns (uint256 claimId) {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.ACTIVE) revert InvalidStatus();
+        if (msg.sender != agreement.recipient) revert NotRecipient();
+        if (block.timestamp < agreement.leaseEnd) revert ClaimWindowNotOpen();
+        if (block.timestamp > agreement.claimDeadline) revert ClaimWindowClosed();
+        if (agreement.claimCount >= MAX_CLAIMS) revert TooManyClaims();
+        if (amount == 0) revert InvalidAmount();
+        if (reasonHash == bytes32(0) || evidenceHash == bytes32(0)) revert MissingEvidence();
+
+        // Global reservation: open + approved + new can never exceed the funded
+        // deposit. Computed in uint256 so the three uint128 terms cannot overflow.
+        if (
+            uint256(agreement.totalOpenClaimAmount) +
+                uint256(agreement.totalApprovedClaims) +
+                uint256(amount) >
+            uint256(agreement.totalFunded)
+        ) {
+            revert ClaimExceedsAvailableDeposit();
+        }
+
+        if (claimType == ClaimType.SHARED) {
+            if (liableTenant != address(0)) revert InvalidClaim();
+        } else {
+            Tenant storage liable = tenants[agreementId][liableTenant];
+            if (!liable.exists) revert InvalidClaim();
+            // Per-tenant reservation: open + approved + new individual claims can
+            // never exceed the liable tenant's funded contribution.
+            if (
+                uint256(liable.openIndividualClaimAmount) +
+                    uint256(liable.approvedIndividualClaims) +
+                    uint256(amount) >
+                uint256(liable.fundedAmount)
+            ) {
+                revert IndividualClaimExceedsTenantBalance();
+            }
+            liable.openIndividualClaimAmount += amount;
+        }
+
+        // Claim IDs are sequential per agreement starting at 1 and never reused.
+        claimId = uint256(agreement.claimCount) + 1;
+        agreement.claimCount = uint32(claimId);
+        agreement.unresolvedClaimCount += 1;
+        agreement.totalOpenClaimAmount += amount;
+
+        Claim storage claim = claims[agreementId][claimId];
+        claim.liableTenant = liableTenant;
+        claim.reasonHash = reasonHash;
+        claim.evidenceHash = evidenceHash;
+        claim.amount = amount;
+        claim.claimType = claimType;
+        claim.status = ClaimStatus.PENDING;
+
+        emit ClaimSubmitted(
+            agreementId,
+            claimId,
+            claimType,
+            liableTenant,
+            amount,
+            reasonHash,
+            evidenceHash
+        );
+    }
+
+    /// @notice The recipient withdraws a still-pending claim (for example to submit a
+    ///         corrected one). The claim keeps its ID and still counts toward
+    ///         MAX_CLAIMS; its stored values are never altered. No funds move.
+    function withdrawPendingClaim(uint256 agreementId, uint256 claimId) external {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.ACTIVE) revert InvalidStatus();
+        if (msg.sender != agreement.recipient) revert NotRecipient();
+
+        Claim storage claim = claims[agreementId][claimId];
+        if (claim.status != ClaimStatus.PENDING) revert InvalidClaim();
+
+        claim.status = ClaimStatus.WITHDRAWN;
+        agreement.unresolvedClaimCount -= 1;
+        _releaseOpenClaimReservation(agreementId, agreement, claim);
+
+        emit ClaimWithdrawn(agreementId, claimId, claim.amount);
+    }
+
+    /// @notice A tenant casts one immutable YES/NO vote on a pending claim, no later
+    ///         than the settlement deadline. The claim resolves immediately once the
+    ///         outcome is mathematically determined.
+    function voteClaim(uint256 agreementId, uint256 claimId, bool support) external {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.ACTIVE) revert InvalidStatus();
+        if (block.timestamp > agreement.settlementDeadline) revert VotingClosed();
+
+        Tenant storage tenant = tenants[agreementId][msg.sender];
+        if (!tenant.exists) revert NotTenant();
+
+        Claim storage claim = claims[agreementId][claimId];
+        if (claim.status != ClaimStatus.PENDING) revert InvalidClaim();
+        if (votes[agreementId][claimId][msg.sender] != 0) revert AlreadyVoted();
+
+        votes[agreementId][claimId][msg.sender] = support ? 1 : 2;
+        if (support) {
+            claim.yesVotes += 1;
+        } else {
+            claim.noVotes += 1;
+        }
+
+        emit ClaimVoted(agreementId, claimId, msg.sender, support);
+
+        if (claim.yesVotes >= agreement.requiredApprovals) {
+            // Strict majority reached: approve immediately.
+            _approveClaim(agreementId, agreement, claimId, claim);
+        } else if (claim.noVotes >= agreement.tenantCount - agreement.requiredApprovals + 1) {
+            // Approval is mathematically impossible: the maximum achievable YES count
+            // is tenantCount - noVotes. It drops below requiredApprovals exactly when
+            //   noVotes > tenantCount - requiredApprovals
+            // i.e. when noVotes >= tenantCount - requiredApprovals + 1.
+            _rejectClaim(agreementId, agreement, claimId, claim);
+        }
+    }
+
+    /// @notice After the settlement deadline has strictly passed, any participant may
+    ///         finalize a still-pending claim: it approves only if the YES threshold
+    ///         was already reached, otherwise it rejects. (In normal operation a claim
+    ///         with enough YES votes approved immediately, so this normally rejects.)
+    function finalizePendingClaim(uint256 agreementId, uint256 claimId) external {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.ACTIVE) revert InvalidStatus();
+        if (block.timestamp <= agreement.settlementDeadline) revert VotingStillOpen();
+        if (!tenants[agreementId][msg.sender].exists && msg.sender != agreement.recipient) {
+            revert NotParticipant();
+        }
+
+        Claim storage claim = claims[agreementId][claimId];
+        if (claim.status != ClaimStatus.PENDING) revert InvalidClaim();
+
+        if (claim.yesVotes >= agreement.requiredApprovals) {
+            _approveClaim(agreementId, agreement, claimId, claim);
+        } else {
+            _rejectClaim(agreementId, agreement, claimId, claim);
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // Views
     // ---------------------------------------------------------------------
 
@@ -459,6 +688,27 @@ contract SharedDepositEscrow is ReentrancyGuard {
         Agreement storage agreement = agreements[agreementId];
         if (agreement.status != AgreementStatus.FUNDING) return false;
         return _allTenantsAcceptedAndFunded(agreementId, agreement);
+    }
+
+    /// @notice Full immutable claim record plus live vote counts and status.
+    ///         Retrieve claims one at a time by ID (1..claimCount); there is no
+    ///         unbounded all-claims call.
+    function getClaim(uint256 agreementId, uint256 claimId) external view returns (Claim memory) {
+        _requireAgreementView(agreementId);
+        Claim memory claim = claims[agreementId][claimId];
+        if (claim.status == ClaimStatus.NONE) revert InvalidClaim();
+        return claim;
+    }
+
+    /// @notice A tenant's recorded vote on a claim: 0 = not voted, 1 = YES, 2 = NO.
+    function getVote(
+        uint256 agreementId,
+        uint256 claimId,
+        address tenant
+    ) external view returns (uint8) {
+        _requireAgreementView(agreementId);
+        if (claims[agreementId][claimId].status == ClaimStatus.NONE) revert InvalidClaim();
+        return votes[agreementId][claimId][tenant];
     }
 
     // ---------------------------------------------------------------------
@@ -512,6 +762,61 @@ contract SharedDepositEscrow is ReentrancyGuard {
             if (tenant.fundedAmount != tenant.requiredAmount) return false;
         }
         return true;
+    }
+
+    /// @dev Resolves a pending claim as APPROVED. Exactly one resolution path runs per
+    ///      claim (status guard in every caller), so no counter can double-move:
+    ///      unresolved count decreases once, the open reservation converts to an
+    ///      approved total once, and the per-tenant/shared buckets update once.
+    function _approveClaim(
+        uint256 agreementId,
+        Agreement storage agreement,
+        uint256 claimId,
+        Claim storage claim
+    ) private {
+        claim.status = ClaimStatus.APPROVED;
+        agreement.unresolvedClaimCount -= 1;
+        agreement.totalOpenClaimAmount -= claim.amount;
+        agreement.totalApprovedClaims += claim.amount;
+
+        if (claim.claimType == ClaimType.INDIVIDUAL) {
+            Tenant storage liable = tenants[agreementId][claim.liableTenant];
+            liable.openIndividualClaimAmount -= claim.amount;
+            liable.approvedIndividualClaims += claim.amount;
+        } else {
+            agreement.sharedApprovedClaims += claim.amount;
+        }
+
+        emit ClaimApproved(agreementId, claimId, claim.amount);
+    }
+
+    /// @dev Resolves a pending claim as REJECTED, releasing its reservations without
+    ///      touching approved totals. Runs at most once per claim (status guard in
+    ///      every caller).
+    function _rejectClaim(
+        uint256 agreementId,
+        Agreement storage agreement,
+        uint256 claimId,
+        Claim storage claim
+    ) private {
+        claim.status = ClaimStatus.REJECTED;
+        agreement.unresolvedClaimCount -= 1;
+        _releaseOpenClaimReservation(agreementId, agreement, claim);
+
+        emit ClaimRejected(agreementId, claimId, claim.amount);
+    }
+
+    /// @dev Releases the open-claim reservation of a claim leaving PENDING without
+    ///      approval (rejection or recipient withdrawal).
+    function _releaseOpenClaimReservation(
+        uint256 agreementId,
+        Agreement storage agreement,
+        Claim storage claim
+    ) private {
+        agreement.totalOpenClaimAmount -= claim.amount;
+        if (claim.claimType == ClaimType.INDIVIDUAL) {
+            tenants[agreementId][claim.liableTenant].openIndividualClaimAmount -= claim.amount;
+        }
     }
 
     /// @dev All value leaves the contract through this helper, only ever addressed to
