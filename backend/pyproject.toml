@@ -17,6 +17,8 @@ dependencies = [
     "pymysql>=1.1",
     "web3>=7.0",
     "eth-account>=0.13",
+    "eth-utils>=4.0",
+    "eth-hash[pycryptodome]>=0.7",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
 ]
@@ -27,6 +29,7 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.5",
     "mypy>=1.10",
+    "types-PyMySQL>=1.1",
 ]
 
 [tool.setuptools.packages.find]
@@ -41,7 +44,10 @@ select = ["E", "F", "W", "I", "B", "UP", "S"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+# S101: pytest uses assert. S105/S106: tests use literal fake secrets on
+# purpose. S608: test fixtures interpolate table/database names from fixed
+# internal lists (never user input) for guarded cleanup SQL.
+"tests/*" = ["S101", "S105", "S106", "S608"]
 
 [tool.mypy]
 python_version = "3.11"

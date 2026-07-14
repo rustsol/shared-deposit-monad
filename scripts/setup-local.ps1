@@ -1,20 +1,11 @@
 # One-time local development setup for Shared Deposit on Windows with WAMP MySQL.
-# Idempotent: safe to re-run. Never overwrites an existing .env file.
+# Idempotent: safe to re-run. Never overwrites an existing .env. Never drops data.
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-Write-Host "=== 1/5 WAMP MySQL ==="
-$mysqlClient = Get-ChildItem "E:\wamp64\bin\mysql\*\bin\mysql.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $mysqlClient) {
-    throw "No mysql.exe found under E:\wamp64\bin\mysql. Is WAMP installed?"
-}
-& $mysqlClient.FullName -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS shared_deposit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-if ($LASTEXITCODE -ne 0) { throw "MySQL connection or database creation failed." }
-Write-Host "Database shared_deposit is present."
-
-Write-Host "=== 2/5 Environment examples ==="
+Write-Host "=== 1/5 Environment examples ==="
 $envPairs = @(
     @{ Src = ".env.example";            Dst = ".env" },
     @{ Src = "backend\.env.example";    Dst = "backend\.env" },
@@ -30,7 +21,7 @@ foreach ($pair in $envPairs) {
     }
 }
 
-Write-Host "=== 3/5 Python backend ==="
+Write-Host "=== 2/5 Python backend ==="
 if (-not (Test-Path "backend\.venv")) {
     python -m venv backend\.venv
 }
@@ -39,22 +30,26 @@ if (-not (Test-Path "backend\.venv")) {
 if ($LASTEXITCODE -ne 0) { throw "Backend dependency installation failed." }
 Write-Host "Backend virtual environment ready."
 
-if (Test-Path "backend\alembic.ini") {
-    Write-Host "Running Alembic migrations..."
-    Push-Location backend
-    & .venv\Scripts\python.exe -m alembic upgrade head
-    $alembicExit = $LASTEXITCODE
-    Pop-Location
-    if ($alembicExit -ne 0) { throw "Alembic migration failed." }
-} else {
-    Write-Host "No alembic.ini yet (migrations arrive in a later phase); skipping."
-}
+Write-Host "=== 3/5 WAMP MySQL database (Python-based, MySQL CLI not required) ==="
+Push-Location backend
+& .venv\Scripts\python.exe -m app.database.setup
+$dbExit = $LASTEXITCODE
+Pop-Location
+if ($dbExit -ne 0) { throw "Database setup failed. Is WAMP MySQL running on 127.0.0.1:3306?" }
 
-Write-Host "=== 4/5 Contracts workspace ==="
+Write-Host "=== 4/5 Alembic migrations ==="
+Push-Location backend
+& .venv\Scripts\python.exe -m alembic upgrade head
+$alembicExit = $LASTEXITCODE
+if ($alembicExit -eq 0) {
+    & .venv\Scripts\python.exe -m alembic current
+}
+Pop-Location
+if ($alembicExit -ne 0) { throw "Alembic migration failed." }
+
+Write-Host "=== 5/5 Node workspaces ==="
 npm --prefix contracts install
 if ($LASTEXITCODE -ne 0) { throw "contracts npm install failed." }
-
-Write-Host "=== 5/5 Frontend workspace ==="
 npm --prefix frontend install
 if ($LASTEXITCODE -ne 0) { throw "frontend npm install failed." }
 

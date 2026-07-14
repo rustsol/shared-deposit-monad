@@ -23,25 +23,21 @@ Test-Tool "npm" "npm --version"
 Test-Tool "python" "python --version"
 
 Write-Host ""
-Write-Host "=== WAMP MySQL (127.0.0.1:3306, root, blank password) ==="
-$mysqlClient = Get-ChildItem "E:\wamp64\bin\mysql\*\bin\mysql.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($mysqlClient) {
-    $version = & $mysqlClient.FullName -h 127.0.0.1 -P 3306 -u root -N -e "SELECT VERSION();" 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[OK]   MySQL server reachable, version: $version"
-        $db = & $mysqlClient.FullName -h 127.0.0.1 -P 3306 -u root -N -e "SHOW DATABASES LIKE 'shared_deposit';" 2>&1
-        if ($db -match "shared_deposit") {
-            Write-Host "[OK]   Database shared_deposit exists"
-        } else {
-            Write-Host "[INFO] Database shared_deposit does not exist yet (run setup-local.ps1)"
-        }
+Write-Host "=== WAMP MySQL (127.0.0.1:3306, Python-based check) ==="
+$backendPython = Join-Path (Split-Path -Parent $PSScriptRoot) "backend\.venv\Scripts\python.exe"
+if (Test-Path $backendPython) {
+    Push-Location (Join-Path (Split-Path -Parent $PSScriptRoot) "backend")
+    & $backendPython -m app.database.setup --check
+    $dbExit = $LASTEXITCODE
+    Pop-Location
+    if ($dbExit -eq 0) {
+        Write-Host "[OK]   MySQL reachable and database present"
     } else {
-        Write-Host "[FAIL] MySQL connection failed: $version"
+        Write-Host "[INFO] MySQL unreachable or database missing (run setup-local.ps1)"
         $failures++
     }
 } else {
-    Write-Host "[MISS] No mysql.exe found under E:\wamp64\bin\mysql"
-    $failures++
+    Write-Host "[INFO] backend\.venv not created yet (run setup-local.ps1 first); skipping DB check"
 }
 
 Write-Host ""
