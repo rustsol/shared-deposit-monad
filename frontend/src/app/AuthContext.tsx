@@ -86,8 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: { address, message: nonce.message, signature },
       })
+      // Confirm the session cookie actually round-trips before reporting
+      // success: a login is only real when /auth/me sees the session.
+      const confirmed = await api<MeResponse>('/auth/me')
+      if (!confirmed.authenticated || !confirmed.wallet_address) {
+        throw new Error(
+          'the browser did not accept the session cookie — reload the page and sign in again',
+        )
+      }
       setWallet(verified.wallet_address)
-      setCsrfToken(verified.csrf_token)
+      setCsrfToken(confirmed.csrf_token ?? verified.csrf_token)
       setStatus('authenticated')
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'sign-in failed'
