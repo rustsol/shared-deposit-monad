@@ -51,6 +51,17 @@ def get_test_database_url() -> str:
     return url
 
 
+def derive_test_db_url(tag: str) -> str:
+    """A sibling *_test database URL derived from TEST_DATABASE_URL, safe in
+    every environment regardless of the configured test-database name."""
+    url = get_test_database_url()
+    parsed = urlsplit(url)
+    name = parsed.path.lstrip("/").split("?")[0]
+    new_name = name.removesuffix("_test") + f"_{tag}_test"
+    assert_test_database_name(new_name)
+    return url.replace(f"/{name}", f"/{new_name}", 1)
+
+
 def make_test_settings(**overrides: str) -> Settings:
     """Settings isolated from backend/.env, pointing at the test database."""
     values = {

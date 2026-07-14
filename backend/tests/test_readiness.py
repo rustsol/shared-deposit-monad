@@ -10,6 +10,7 @@ import app.database.health as health_module
 from app.database.health import check_readiness, expected_head_revision
 from app.main import app
 from tests.conftest import (
+    derive_test_db_url,
     drop_test_database,
     ensure_test_database,
     get_test_database_url,
@@ -67,22 +68,24 @@ def test_not_ready_when_mysql_unreachable() -> None:
 
 
 def test_not_ready_when_database_missing() -> None:
-    missing_url = get_test_database_url().replace(
-        "shared_deposit_test", "shared_deposit_missing_test"
-    )
+    missing_url = derive_test_db_url("missing")
     drop_test_database(missing_url)
     engine = create_engine(missing_url, connect_args={"connect_timeout": 2})
-    result = check_readiness(engine, "shared_deposit_missing_test")
+    from urllib.parse import urlsplit as _us
+
+    result = check_readiness(engine, _us(missing_url).path.lstrip("/").split("?")[0])
     assert result.ready is False
     engine.dispose()
 
 
 def test_not_ready_when_unmigrated(tmp_path: object) -> None:
-    empty_url = get_test_database_url().replace("shared_deposit_test", "shared_deposit_empty_test")
+    empty_url = derive_test_db_url("empty")
     ensure_test_database(empty_url)
     engine = create_engine(empty_url)
     try:
-        result = check_readiness(engine, "shared_deposit_empty_test")
+        from urllib.parse import urlsplit as _us
+
+        result = check_readiness(engine, _us(empty_url).path.lstrip("/").split("?")[0])
         assert result.ready is False
         assert result.database_reachable is True
         assert result.migration_current is False

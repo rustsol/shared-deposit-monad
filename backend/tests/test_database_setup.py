@@ -4,13 +4,14 @@ from urllib.parse import urlsplit
 
 from app.database.setup import ensure_database
 from tests.conftest import (
+    derive_test_db_url,
     drop_test_database,
     get_test_database_url,
     make_test_settings,
 )
 
 # A dedicated throwaway name — the _test suffix keeps every operation guarded.
-SETUP_DB_URL = get_test_database_url().replace("shared_deposit_test", "shared_deposit_setup_test")
+SETUP_DB_URL = derive_test_db_url("setup")
 
 
 def test_reports_existing_database_without_touching_it() -> None:
