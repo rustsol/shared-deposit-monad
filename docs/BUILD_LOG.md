@@ -219,3 +219,33 @@ No auth endpoints, invitations, evidence upload, agreement/claim APIs, RPC acces
 ### Next phase
 
 Phase 5 — evidence storage and event indexing (per docs/03), pending explicit approval.
+
+---
+
+## 2026-07-14 (Phase 5): wallet authentication, sessions, CSRF, invitations
+
+Scope re-ordered by explicit approval: authentication + invitations first; evidence and event indexing follow in later phases.
+
+### Implemented (commits `851f192`, `2403e38` + this commit)
+
+- **Sign-in message**: docs/02 §5.2 lists required contents but no exact format → **EIP-4361 verbatim** (decision recorded here and in backend/README.md), with JS `toISOString()` millisecond timestamps and EIP-55 checksummed address so viem's `createSiweMessage` can reproduce it byte-for-byte; golden message fixture committed. The statement says explicitly that signing verifies ownership only and is not a transaction.
+- **Auth** (`851f192`): `POST /auth/nonce` (256-bit one-time nonce, 10-min TTL, hash-only storage, exact message returned once), `POST /auth/verify` (byte-exact message equality with the stored challenge, current-config domain/URI/chain re-validation, eth_account recovery, atomic single-statement nonce consumption, session + wallet-profile creation in one transaction, uniform 401s), sessions (256-bit token, hash-only, HttpOnly/SameSite=Lax/Path=/ cookie, Secure enforced outside local envs, multi-session-per-wallet policy), `GET /auth/me` (rotates + returns the session-bound CSRF value — only the hash is stored, so re-issue is the documented recovery path), `POST /auth/logout` (revocation + cookie clear), session-bound double-submit CSRF with constant-time comparison and Origin allow-list, in-process sliding-window rate limiter (documented single-instance MVP limitation), safe audit events, focused migration `14c616e7b68c` (auth_sessions.csrf_token_hash; invitations.superseded_by for rotation-state distinction).
+- **Invitations** (`2403e38`): draft-scoped lifecycle (`agreement_key = draft:{uuid}`; draft rows are inserted directly by tests since draft CRUD APIs are a later phase) — creation (creator-only, participant-slot validation, 256-bit URL-safe token shown once, one-active-token policy with 409 on duplicates), review (token hashed before lookup; states valid_disconnected/valid_wallet_matched/wrong_wallet/expired/revoked/rotated/already_claimed/invalid; no-referrer + no-store headers; uniform 404 for unknown tokens), claim (correct wallet + CSRF + origin; atomic one-time `used_at`; explicitly offchain: response says onchain acceptance still required; no transaction hash anywhere), rotation (atomic supersede, one replacement max, used invitations cannot revive), revocation (idempotent, permanent, by internal ID), access-log middleware redacting `/api/v1/invitations/*` segments, CORS locked to the frontend origin with credentials.
+
+### Validation (all commands actually run)
+
+- ruff clean; ruff format --check clean; mypy strict: no issues in 41 source files
+- `pytest`: **140 passed, 0 failed** (54 new: auth flow 24, invitations 18, CSRF 6, security/logging 6 — plus all 86 Phase 4 tests unchanged) against real MySQL
+- Concurrency (real threads, real MySQL): concurrent nonce replay → exactly one session; concurrent invitation claim → exactly one success; concurrent rotation → exactly one active replacement
+- Log/audit redaction proven by capture: raw nonces, signatures, session cookies, CSRF values, and invitation tokens absent from all captured logs and audit rows; invitation paths logged as `[redacted]`
+- Signature fixtures: deterministic, clearly-marked TEST-ONLY keys (`0x01…`, `0x02…`, `0x03…`) in `tests/fixtures/wallets.py`; never in runtime code, env files, or CI variables; never presented as real wallets
+- Fix discovered during testing: Alembic's `fileConfig()` silently disabled pre-existing loggers (killing the access log); `disable_existing_loggers=False` now set in `alembic/env.py`
+- Migration `14c616e7b68c` verified: upgrade applied locally and in CI; round-trip covered by the existing migration suite
+
+### Explicitly not done in Phase 5
+
+No evidence upload/serving, no contract RPC/ABI code, no event indexer, no agreement/claim CRUD APIs (beyond direct test-fixture draft rows), no frontend login UI or product screens, no deployment, no real private keys, no demo data. Monad RPC never contacted.
+
+### Next phase
+
+Phase 6 — evidence storage and/or event indexing (docs/03 Phase 5 content), pending explicit approval and scope choice.

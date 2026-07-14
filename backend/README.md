@@ -37,6 +37,54 @@ Alembic is the only schema authority (`create_all` is never used). The database 
 
 `app/canonical/terms.py` produces the deterministic agreement-terms JSON (sorted keys, compact separators, UTF-8, lowercase addresses, decimal-string wei, closed schema) and its Ethereum Keccak-256 hash. `app/canonical/reason.py` normalizes claim reasons (NFC, CRLF→LF, outer trim) before hashing. Golden vectors live in `tests/fixtures/` (unit-test fixtures only — not real agreements); the expected hash is independently reproduced with viem's `keccak256`, proving browser/backend parity.
 
+## Authentication (wallet signature, EIP-4361)
+
+docs/02 §5.2 defines the message contents but no exact text, so the sign-in
+message is **EIP-4361 (Sign-In with Ethereum) verbatim** — reproducible in the
+browser with viem's `createSiweMessage` (JavaScript `toISOString()` timestamp
+form; EIP-55 checksummed address in the message, lowercase normalization in
+storage). A golden message fixture lives in `tests/test_auth_flow.py`.
+
+- `POST /api/v1/auth/nonce` — 256-bit one-time nonce (10-minute TTL), returned
+  only inside the exact message to sign; only its SHA-256 hash is stored.
+- `POST /api/v1/auth/verify` — byte-exact message match, current-config
+  domain/URI/chain re-validation, `eth_account` signer recovery, atomic
+  single-statement nonce consumption (concurrent replays cannot both win),
+  session + CSRF issue, wallet profile created on first login (never
+  duplicated, never overwritten).
+- Sessions: 256-bit opaque token, hash-only storage, `HttpOnly` `SameSite=Lax`
+  `Path=/` cookie (`Secure` mandatory outside local development),
+  `SESSION_TTL_SECONDS` lifetime, explicit revocation via `POST /auth/logout`.
+  Policy: multiple concurrent sessions per wallet (one per device).
+- CSRF: session-bound double-submit. A 256-bit value is issued at login; only
+  its hash is stored; every cookie-authenticated mutation requires the
+  `X-CSRF-Token` header (constant-time hash comparison) plus an approved
+  `Origin`. `GET /auth/me` rotates and returns the current session's CSRF
+  value (exactly one active per session), since only the hash is persisted.
+- Rate limiting: in-process sliding window on nonce/verify/invitation
+  endpoints — **single-instance MVP only**; it does not coordinate across
+  servers and is deliberately replaceable by a shared store later.
+
+## Invitations (offchain draft access only)
+
+Invitations gate access to **pre-onchain drafts**. Claiming one records
+`used_at` and nothing else — it never marks anything accepted, funded, or
+active onchain; that always requires a real wallet transaction later.
+
+States: `active`, `already_claimed` (one-time), `expired` (72h TTL),
+`revoked`, `rotated` (revoked + `superseded_by`). Tokens are 256-bit
+URL-safe values shown exactly once at creation/rotation; the database stores
+SHA-256 hashes only; review responses send `Referrer-Policy: no-referrer` and
+`Cache-Control: no-store`; the app access log redacts `/api/v1/invitations/*`
+path segments. Duplicate-prevention policy: one active token per
+draft/wallet/role — creating a second is rejected (409); rotation is the
+explicit replacement operation and atomically leaves at most one active token.
+
+**Deployment note:** a hosted reverse proxy keeps its own access log — it MUST
+redact `/api/v1/invitations/*` path segments and never log `Cookie`,
+`Authorization`, or `X-CSRF-Token` headers. The application-level redaction
+covers only the app's own log.
+
 ## Tests
 
 ```powershell
