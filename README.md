@@ -49,9 +49,9 @@ The application never shows a success state without a real transaction receipt a
 
 ## Project status
 
-**Contract funding lifecycle implemented and tested locally.** `SharedDepositEscrow` currently covers agreement creation, terms acceptance, funding with automatic activation, pre-activation withdrawal, funding-expiry cancellation, and cancelled-funding withdrawal with historical accounting — verified by 75 passing Hardhat tests (including reentrancy, malicious-receiver, and randomized invariant tests) against local test signers only.
+**The smart contract is functionally complete for the documented MVP and tested locally.** `SharedDepositEscrow` covers the full lifecycle: agreement creation, terms acceptance, funding with automatic activation, pre-activation withdrawal, funding-expiry cancellation with historical accounting, recipient deduction claims (shared and individual, hash-only evidence references, 32-claim lifetime limit), immutable tenant voting with immediate mathematical resolution, post-deadline claim finalization, deterministic settlement using the largest-remainder allocation, and reentrancy-safe pull withdrawals for tenant refunds and the recipient payout — verified by 135 passing Hardhat tests (boundary, security, forced-MON, and seeded randomized invariant tests) against local test signers only.
 
-Not implemented yet: claims, voting, settlement, refund/payout withdrawals, backend blockchain integration, database migrations, frontend product flows, and any deployment. **The contract is not deployed to any network and no wallet keys exist in this repository.** Implementation follows the phased plan in [docs/03_IMPLEMENTATION_PLAN.md](docs/03_IMPLEMENTATION_PLAN.md).
+Not implemented yet: backend (auth, evidence storage, canonical hashing, event indexer), MySQL schema and migrations, frontend product flows, and any deployment. **The contract is not deployed to any network and no wallet keys exist in this repository.** Implementation follows the phased plan in [docs/03_IMPLEMENTATION_PLAN.md](docs/03_IMPLEMENTATION_PLAN.md).
 
 ## License
 

@@ -117,3 +117,99 @@ export enum AgreementStatus {
   FINALIZED = 3,
   CANCELLED = 4,
 }
+
+export enum ClaimType {
+  SHARED = 0,
+  INDIVIDUAL = 1,
+}
+
+export enum ClaimStatus {
+  NONE = 0,
+  PENDING = 1,
+  APPROVED = 2,
+  REJECTED = 3,
+  WITHDRAWN = 4,
+}
+
+export const REASON_HASH = keccak256(toHex("claim-reason-test-vector"));
+export const EVIDENCE_HASH = keccak256(toHex("evidence-manifest-test-vector"));
+
+/** Creates an agreement, has every party accept, and funds it fully → ACTIVE. */
+export async function setupActiveAgreement(
+  escrow: EscrowContract,
+  creator: Wallet,
+  recipient: Wallet,
+  tenantWallets: Wallet[],
+  amounts: bigint[],
+  timeline?: Timeline,
+): Promise<{ agreementId: bigint; timeline: Timeline }> {
+  const usedTimeline = timeline ?? (await futureTimeline());
+  const agreementId = await createAgreement(escrow, creator, {
+    tenants: tenantWallets.map((w) => w.account.address),
+    amounts,
+    recipient: recipient.account.address,
+    timeline: usedTimeline,
+  });
+  await escrow.write.acceptAsRecipient([agreementId, TERMS_HASH], {
+    account: recipient.account,
+  });
+  for (let i = 0; i < tenantWallets.length; i++) {
+    await escrow.write.acceptAsTenant([agreementId, TERMS_HASH], {
+      account: tenantWallets[i].account,
+    });
+    await escrow.write.deposit([agreementId], {
+      account: tenantWallets[i].account,
+      value: amounts[i],
+    });
+  }
+  return { agreementId, timeline: usedTimeline };
+}
+
+/**
+ * TypeScript mirror of the contract's settlement algorithm (docs/02 §3.9):
+ * individual deductions first, Math.mulDiv-style floor base allocations, mulmod
+ * fractional remainders, largest-remainder distribution with per-tenant cap,
+ * ties by lowest index, granted tenant's remainder cleared.
+ */
+export function computeExpectedSettlement(
+  funded: bigint[],
+  individualApproved: bigint[],
+  sharedTotal: bigint,
+): { refunds: bigint[]; allocations: bigint[] } {
+  const n = funded.length;
+  const remaining = funded.map((value, i) => value - individualApproved[i]);
+  const totalRemaining = remaining.reduce((a, b) => a + b, 0n);
+  if (sharedTotal > totalRemaining) {
+    throw new Error("model: sharedTotal exceeds totalRemaining");
+  }
+  const alloc: bigint[] = new Array(n).fill(0n);
+  if (sharedTotal > 0n) {
+    const frac: bigint[] = new Array(n).fill(0n);
+    let allocated = 0n;
+    for (let i = 0; i < n; i++) {
+      alloc[i] = (sharedTotal * remaining[i]) / totalRemaining;
+      frac[i] = (sharedTotal * remaining[i]) % totalRemaining;
+      allocated += alloc[i];
+    }
+    let unallocated = sharedTotal - allocated;
+    while (unallocated > 0n) {
+      let best = -1;
+      let bestFrac = -1n;
+      for (let i = 0; i < n; i++) {
+        if (alloc[i] >= remaining[i]) continue;
+        if (best === -1 || frac[i] > bestFrac) {
+          best = i;
+          bestFrac = frac[i];
+        }
+      }
+      if (best === -1) throw new Error("model: no eligible tenant");
+      alloc[best] += 1n;
+      frac[best] = 0n;
+      unallocated -= 1n;
+    }
+  }
+  return {
+    refunds: remaining.map((value, i) => value - alloc[i]),
+    allocations: alloc,
+  };
+}

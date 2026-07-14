@@ -4,16 +4,18 @@ pragma solidity 0.8.28;
 import {SharedDepositEscrow} from "../SharedDepositEscrow.sol";
 
 /// @title TenantProxy
-/// @notice TEST-ONLY fixture. Lets a contract address act as a tenant so the test
-///         suite can exercise malicious-receiver and reentrancy behavior against
-///         SharedDepositEscrow withdrawals. Never deployed to any public network and
-///         not part of the product.
+/// @notice TEST-ONLY fixture. Lets a contract address act as a tenant or as the
+///         deposit recipient so the test suite can exercise malicious-receiver and
+///         reentrancy behavior against every SharedDepositEscrow withdrawal path.
+///         Never deployed to any public network and not part of the product.
 contract TenantProxy {
     enum ReceiveMode {
         ACCEPT, // receives funds normally
         REJECT, // reverts on any incoming transfer
         REENTER_FUNDING, // attempts to re-enter withdrawFundingBeforeActivation
-        REENTER_CANCELLED // attempts to re-enter withdrawCancelledFunding
+        REENTER_CANCELLED, // attempts to re-enter withdrawCancelledFunding
+        REENTER_REFUND, // attempts to re-enter withdrawTenantRefund
+        REENTER_PAYOUT // attempts to re-enter withdrawRecipientPayout
     }
 
     SharedDepositEscrow public immutable escrow;
@@ -35,8 +37,31 @@ contract TenantProxy {
         escrow.acceptAsTenant(agreementId, expectedTermsHash);
     }
 
+    function acceptAsRecipient(uint256 agreementId, bytes32 expectedTermsHash) external {
+        escrow.acceptAsRecipient(agreementId, expectedTermsHash);
+    }
+
     function deposit(uint256 agreementId) external payable {
         escrow.deposit{value: msg.value}(agreementId);
+    }
+
+    function submitClaim(
+        uint256 agreementId,
+        SharedDepositEscrow.ClaimType claimType,
+        address liableTenant,
+        uint128 amount,
+        bytes32 reasonHash,
+        bytes32 evidenceHash
+    ) external returns (uint256) {
+        return
+            escrow.submitClaim(
+                agreementId,
+                claimType,
+                liableTenant,
+                amount,
+                reasonHash,
+                evidenceHash
+            );
     }
 
     function withdrawFundingBeforeActivation(uint256 agreementId, uint128 amount) external {
@@ -45,6 +70,14 @@ contract TenantProxy {
 
     function withdrawCancelledFunding(uint256 agreementId) external {
         escrow.withdrawCancelledFunding(agreementId);
+    }
+
+    function withdrawTenantRefund(uint256 agreementId) external {
+        escrow.withdrawTenantRefund(agreementId);
+    }
+
+    function withdrawRecipientPayout(uint256 agreementId) external {
+        escrow.withdrawRecipientPayout(agreementId);
     }
 
     receive() external payable {
@@ -56,6 +89,12 @@ contract TenantProxy {
         }
         if (mode == ReceiveMode.REENTER_CANCELLED) {
             escrow.withdrawCancelledFunding(reentryAgreementId);
+        }
+        if (mode == ReceiveMode.REENTER_REFUND) {
+            escrow.withdrawTenantRefund(reentryAgreementId);
+        }
+        if (mode == ReceiveMode.REENTER_PAYOUT) {
+            escrow.withdrawRecipientPayout(reentryAgreementId);
         }
     }
 }

@@ -125,3 +125,52 @@ No claims, voting, settlement, refunds, or recipient payout; no deployment to Mo
 ### Next phase
 
 Phase 3 — claims, voting, and settlement (with the approved largest-remainder allocation), pending explicit approval.
+
+---
+
+## 2026-07-14 (Phase 3): claims, voting, settlement, withdrawals
+
+### Implemented (commits `d07e3b4`, `9e9e8ed` + this commit)
+
+- **Claims** (`d07e3b4`): `ClaimType`/`ClaimStatus` enums, `Claim` struct (hash-only public data: amount, reason hash, evidence-manifest hash, vote counts, status), claim/vote mappings, `submitClaim` (recipient-only, `leaseEnd <= now <= claimDeadline`, global and per-tenant reservation caps computed in uint256, 32-claim lifetime limit with withdrawn claims counted, sequential 1-based claim IDs never reused), `withdrawPendingClaim` (releases reservations, preserves historical claim values, no funds move), `voteClaim` (one immutable vote, YES threshold `floor(n/2)+1`, immediate rejection at `tenantCount - requiredApprovals + 1` NO votes with the impossibility derivation commented), `finalizePendingClaim` (participant-only per the user guide, strictly after the settlement deadline, approve only if the YES threshold was reached), shared `_approveClaim`/`_rejectClaim`/`_releaseOpenClaimReservation` helpers so no counter can double-move, `getClaim`/`getVote` views.
+- **Settlement** (`9e9e8ed`): `finalizeAgreement` (permissionless per the scope document, strictly after the settlement deadline, zero unresolved claims, moves no funds), `_computeSettlement` implementing the approved algorithm exactly — individual deductions first, `Math.mulDiv` base allocations, `mulmod` fractional remainders, largest-remainder distribution capped at each tenant's remaining balance with index tie-breaks and cleared remainders, bounded loops (remainder < 8, proof commented) — stored refunds, `withdrawTenantRefund`/`withdrawRecipientPayout` (finalized-only, once, flag-before-transfer, ReentrancyGuard, never recomputed), `getRecipientPayout` view, `AgreementFinalized`/`TenantRefundWithdrawn`/`RecipientPayoutWithdrawn` events.
+- **Tests** (this commit): `claims.voting.ts` (29), `settlement.accounting.ts` (30), extended `invariants.property.ts` (full-lifecycle seeded suite, 12 scenarios), `TenantProxy` extended with recipient role and refund/payout reentry modes, new `ForceSend` fixture (test-only selfdestruct force-transfer; deprecation warning expected and accepted).
+
+Documented additions/decisions: `TooManyClaims` error (canonical list had none for the claim-ID limit); claim IDs are 1-based sequential per agreement; `finalizePendingClaim` is participant-only (user guide: "any participant") while `finalizeAgreement` is permissionless (scope doc: "anyone may finalize"); `getRecipientPayout` view added for safe frontend consumption.
+
+### Validation (all commands actually run)
+
+- `npm run lint` exit 0; `npm run typecheck` exit 0; `npm run compile` clean (solc 0.8.28, prague, optimizer 200 — unchanged settings)
+- `npx hardhat test`: **135 passing, 0 failing, 0 skipped** (lifecycle 47, withdrawals.security 27, claims.voting 29, settlement.accounting 30, property 2 — funding 20 scenarios seed `0xc0ffee`, full lifecycle 12 scenarios seed `0xbadd1ce`)
+- Forced-MON tests prove unsolicited transfers never change `totalFunded`, claim capacity, refunds, payout, or withdrawable amounts, and that the excess stays unallocated with no rescue path
+- Two test-generator bugs were found and fixed during development (individual-claim capacity ignoring the global cap; an event-query semantics assertion) — both in tests, not the contract
+- Secret scan clean; no `.env`, no deployment artifacts, no fake addresses/hashes
+
+### Bytecode (local artifact)
+
+Creation 16,408 bytes; **deployed 16,340 bytes = 66.5% of the 24,576-byte EVM limit**.
+
+### Local gas estimates (Hardhat network only — NOT testnet measurements)
+
+| Operation | Gas |
+|---|---|
+| submitClaim (shared) | 135,854 |
+| voteClaim (no resolution) | 60,266 |
+| voteClaim (causing approval) | 94,365 |
+| voteClaim (causing rejection) | 69,715 |
+| finalizePendingClaim (reject) | 40,535 |
+| finalizeAgreement (2 tenants) | 97,706 |
+| finalizeAgreement (4 tenants, mixed claims) | 159,206 |
+| finalizeAgreement (8 tenants) | 282,208 |
+| withdrawTenantRefund | 42,843 |
+| withdrawRecipientPayout | 42,746 |
+
+No function approaches block-gas concerns (worst case ~282k with 8 tenants).
+
+### Explicitly not done in Phase 3
+
+No deployment to any network; no private keys requested, generated, or used (local Hardhat signers only); no backend, MySQL, Alembic, auth, invitations, evidence upload, event indexer, or frontend product flows; no demo/fake data.
+
+### Next phase
+
+Phase 4 — backend foundation and MySQL (typed config, SQLAlchemy engine, Alembic initial migration, wallet-signature auth, canonical hashing, drafts, health endpoint), pending explicit approval.
