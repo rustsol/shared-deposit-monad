@@ -282,3 +282,22 @@ estimate (no hardcoded values), deployer balance covers estimated cost,
 existing-deployment guard (refuses silent redeploys; archives records only
 when the chain shows no code). Full metadata:
 `contracts/deployments/monad-testnet.json` (public values only).
+
+---
+
+## 2026-07-14 (Phase 6, part 2): visible end-to-end application slice
+
+### Implemented (commits `6e27e03`, `b89317f` + this commit)
+
+- **Artifact sync** (`contracts/scripts/sync-artifacts.mjs`): real Hardhat ABI/bytecode generated into `frontend/src/generated/` and `backend/app/blockchain/generated/`; `--check` drift mode wired into the contracts CI job.
+- **Backend**: read-only Monad RPC service (web3.py — chain facts, receipts, blocks, code, direct agreement/tenant reads, AgreementCreated decoding; wei as decimal strings; never signs); verified-deployment metadata loader; `GET /config/public` (honest `deployment_status: missing` before deployment; real values after); readiness extended with live RPC/chain/contract-code checks (skipped with `rpc_checked: false` under APP_ENV=test so CI never contacts Monad); agreement-draft APIs (CRUD with creator-from-session, prepare-onchain with canonical args + hash, confirm-onchain with full receipt/event/participant verification against direct contract reads, idempotent, conflict-rejecting); dashboard API (honest empty states, direct-read statuses).
+- **Frontend**: complete application replacing the placeholder — shell (header, wallet/network/auth status, persistent transaction drawer, error boundary), wagmi/viem injected-wallet connection with Monad Testnet switch, EIP-4361 sign-in UI, dashboard, five-step creation wizard, draft page with independent browser-side canonical hash comparison (creation disabled on mismatch) and the real `createAgreement` wallet transaction + backend verification, invitation management (one-time URL display) and review/claim pages, live agreement page with direct contract reads (overview, participants & funding, activity, terms & proof), onchain acceptance, partial/full funding, and pre-activation withdrawal. Exact bigint wei handling throughout.
+- **Tests**: backend 162 (drafts/confirm/dashboard/config additions; FakeChain mock mirrors ChainService — mocks under tests only); frontend 20 (canonical golden-vector parity incl. the cross-language hash, exact wei conversion, API/CSRF client, no-fake-data shell render); local Hardhat integration test (`HARDHAT_INTEGRATION=1`, full deploy→create→accept→fund→ACTIVE against a local node via the real backend ChainService — clearly labelled local, never presented as testnet activity).
+
+### Validation
+
+ruff/format/mypy strict clean (54 files); backend **162 passed**; frontend **20 passed**, typecheck + production build clean; contracts 135 passing; artifact drift check ok. Servers verified live against the real deployment: readiness reports RPC reachable, chain 10143, contract code present at `0x5720c3f7…0910`.
+
+### Deviation
+
+Option B (owner's explicit choice): CLI deployment from the gitignored key replaced the browser-wallet deployment page; `/developer/deploy` and the deployment-confirmation API were therefore not built. Manual Monad Testnet browser QA (create → invite → claim → accept → fund → ACTIVE) is performed with the owner's wallets following this commit.

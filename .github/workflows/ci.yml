@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
+      # Generated ABI modules in frontend/backend must match the compiled artifact.
+      - run: node scripts/sync-artifacts.mjs --check
       - run: npm test
 
   backend:
