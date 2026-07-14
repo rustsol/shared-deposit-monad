@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @title SharedDepositEscrow
 /// @notice Wallet-based rental security-deposit escrow for 2..8 tenant wallets and one
@@ -191,6 +192,22 @@ contract SharedDepositEscrow is ReentrancyGuard {
     event ClaimApproved(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
     event ClaimRejected(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
     event ClaimWithdrawn(uint256 indexed agreementId, uint256 indexed claimId, uint128 amount);
+
+    event AgreementFinalized(
+        uint256 indexed agreementId,
+        uint128 recipientPayout,
+        uint128 tenantRefundTotal
+    );
+    event TenantRefundWithdrawn(
+        uint256 indexed agreementId,
+        address indexed tenant,
+        uint128 amount
+    );
+    event RecipientPayoutWithdrawn(
+        uint256 indexed agreementId,
+        address indexed recipient,
+        uint128 amount
+    );
 
     // ---------------------------------------------------------------------
     // Errors
@@ -647,6 +664,159 @@ contract SharedDepositEscrow is ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------
+    // Finalization and settlement
+    // ---------------------------------------------------------------------
+
+    /// @notice After the settlement deadline has strictly passed and no unresolved
+    ///         claim remains, anyone may finalize the agreement (per the scope
+    ///         document; finalization is permissionless because it only executes the
+    ///         predetermined settlement — it moves no funds and favors no caller).
+    ///         Every tenant refund and the recipient payout are computed once, stored,
+    ///         and never changed afterwards. Withdrawals are separate pull payments.
+    function finalizeAgreement(uint256 agreementId) external {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.ACTIVE) revert InvalidStatus();
+        if (block.timestamp <= agreement.settlementDeadline) revert VotingStillOpen();
+        if (agreement.unresolvedClaimCount != 0) revert UnresolvedClaimsRemain();
+
+        uint128 tenantRefundTotal = _computeSettlement(agreementId, agreement);
+        agreement.status = AgreementStatus.FINALIZED;
+
+        // The recipient payout is exactly the total of approved claims.
+        emit AgreementFinalized(agreementId, agreement.totalApprovedClaims, tenantRefundTotal);
+    }
+
+    /// @dev Deterministic settlement (docs/02 §3.9, approved largest-remainder form).
+    ///
+    ///      A. Approved individual deductions apply first:
+    ///           remaining[i] = fundedAmount[i] - approvedIndividualClaims[i]
+    ///         (never underflows: per-tenant invariant approved <= funded).
+    ///      B. totalRemaining = sum(remaining); sharedTotal = sharedApprovedClaims.
+    ///         sharedTotal <= totalRemaining is provable — sharedApprovedClaims +
+    ///         sum(approvedIndividualClaims) == totalApprovedClaims <= totalFunded and
+    ///         totalRemaining == totalFunded - sum(approvedIndividualClaims) — and is
+    ///         also kept as the documented defensive check.
+    ///      C. Base allocation per tenant with OpenZeppelin Math.mulDiv (floor,
+    ///         overflow-safe): base[i] = mulDiv(sharedTotal, remaining[i], totalRemaining).
+    ///      D. Fractional remainder numerator per tenant, overflow-safe:
+    ///         frac[i] = mulmod(sharedTotal, remaining[i], totalRemaining).
+    ///      E. unallocated = sharedTotal - sum(base). Bound proof: each base[i] floors
+    ///         the exact proportional share, discarding a fraction strictly below one
+    ///         wei, so unallocated == sum(fractions) < tenantCount <= 8.
+    ///      F. Largest-remainder distribution: each remaining wei goes to the tenant
+    ///         with the highest frac among tenants whose allocation is still below
+    ///         their remaining balance; ties resolve to the lowest original tenant
+    ///         index; a granted tenant's frac is cleared so tenants receive extra wei
+    ///         in descending-remainder order. All loops are bounded by the tenant
+    ///         count (<= 8) and the remainder (< 8); nothing is user-controlled.
+    ///         An eligible tenant always exists while wei remain, because
+    ///         sum(alloc) < sharedTotal <= totalRemaining == sum(remaining).
+    ///      G. refund[i] = remaining[i] - alloc[i], stored once. Guarantees:
+    ///         alloc[i] <= remaining[i]; sum(alloc) == sharedTotal; no dust;
+    ///         sum(refunds) + totalApprovedClaims == totalFunded.
+    ///
+    ///      If totalRemaining == 0, sharedTotal is provably 0 and every refund is 0.
+    ///      Raw contract balance is never consulted.
+    function _computeSettlement(
+        uint256 agreementId,
+        Agreement storage agreement
+    ) private returns (uint128 tenantRefundTotal) {
+        address[] storage tenantList = agreementTenants[agreementId];
+        uint256 n = tenantList.length;
+
+        uint256[] memory remaining = new uint256[](n);
+        uint256 totalRemaining = 0;
+        for (uint256 i = 0; i < n; i++) {
+            Tenant storage tenant = tenants[agreementId][tenantList[i]];
+            remaining[i] = uint256(tenant.fundedAmount) - uint256(tenant.approvedIndividualClaims);
+            totalRemaining += remaining[i];
+        }
+
+        uint256 sharedTotal = agreement.sharedApprovedClaims;
+        if (sharedTotal > totalRemaining) revert InvalidAmount();
+
+        uint256[] memory alloc = new uint256[](n);
+        if (sharedTotal > 0) {
+            uint256[] memory frac = new uint256[](n);
+            uint256 allocated = 0;
+            for (uint256 i = 0; i < n; i++) {
+                alloc[i] = Math.mulDiv(sharedTotal, remaining[i], totalRemaining);
+                frac[i] = mulmod(sharedTotal, remaining[i], totalRemaining);
+                allocated += alloc[i];
+            }
+
+            // unallocated < n <= 8 (see bound proof above).
+            uint256 unallocated = sharedTotal - allocated;
+            for (uint256 w = 0; w < unallocated; w++) {
+                uint256 best = type(uint256).max;
+                uint256 bestFrac = 0;
+                for (uint256 i = 0; i < n; i++) {
+                    if (alloc[i] >= remaining[i]) continue; // capped at remaining balance
+                    if (best == type(uint256).max || frac[i] > bestFrac) {
+                        best = i; // strict '>' keeps the lowest index on ties
+                        bestFrac = frac[i];
+                    }
+                }
+                // Unreachable by the capacity argument above; defensive only.
+                if (best == type(uint256).max) revert InvalidAmount();
+                alloc[best] += 1;
+                frac[best] = 0;
+            }
+        }
+
+        for (uint256 i = 0; i < n; i++) {
+            uint256 refund = remaining[i] - alloc[i];
+            // refund <= remaining <= fundedAmount, which fits uint128.
+            uint128 refundAmount = uint128(refund);
+            tenants[agreementId][tenantList[i]].refundAmount = refundAmount;
+            tenantRefundTotal += refundAmount;
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Finalized withdrawals
+    // ---------------------------------------------------------------------
+
+    /// @notice A tenant withdraws its own stored refund exactly once after
+    ///         finalization. The amount was fixed at finalization and is never
+    ///         recomputed here.
+    function withdrawTenantRefund(uint256 agreementId) external nonReentrant {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.FINALIZED) revert InvalidStatus();
+
+        Tenant storage tenant = tenants[agreementId][msg.sender];
+        if (!tenant.exists) revert NotTenant();
+        if (tenant.refundWithdrawn) revert AlreadyWithdrawn();
+        uint128 amount = tenant.refundAmount;
+        if (amount == 0) revert NothingToWithdraw();
+
+        // Effects before interaction; a failed transfer reverts everything.
+        tenant.refundWithdrawn = true;
+
+        emit TenantRefundWithdrawn(agreementId, msg.sender, amount);
+
+        _sendMON(msg.sender, amount);
+    }
+
+    /// @notice The recipient withdraws the stored payout (the exact total of approved
+    ///         claims) exactly once after finalization. Never recomputed here.
+    function withdrawRecipientPayout(uint256 agreementId) external nonReentrant {
+        Agreement storage agreement = _requireAgreement(agreementId);
+        if (agreement.status != AgreementStatus.FINALIZED) revert InvalidStatus();
+        if (msg.sender != agreement.recipient) revert NotRecipient();
+        if (agreement.recipientPayoutWithdrawn) revert AlreadyWithdrawn();
+        uint128 amount = agreement.totalApprovedClaims;
+        if (amount == 0) revert NothingToWithdraw();
+
+        // Effects before interaction; a failed transfer reverts everything.
+        agreement.recipientPayoutWithdrawn = true;
+
+        emit RecipientPayoutWithdrawn(agreementId, msg.sender, amount);
+
+        _sendMON(msg.sender, amount);
+    }
+
+    // ---------------------------------------------------------------------
     // Views
     // ---------------------------------------------------------------------
 
@@ -709,6 +879,15 @@ contract SharedDepositEscrow is ReentrancyGuard {
         _requireAgreementView(agreementId);
         if (claims[agreementId][claimId].status == ClaimStatus.NONE) revert InvalidClaim();
         return votes[agreementId][claimId][tenant];
+    }
+
+    /// @notice The recipient payout — the exact total of approved claims. Immutable
+    ///         once the agreement is FINALIZED; before that it reflects approvals so
+    ///         far. Withdrawal state is `recipientPayoutWithdrawn` on getAgreement.
+    function getRecipientPayout(uint256 agreementId) external view returns (uint128) {
+        Agreement storage agreement = agreements[agreementId];
+        if (agreement.status == AgreementStatus.NONE) revert InvalidAgreement();
+        return agreement.totalApprovedClaims;
     }
 
     // ---------------------------------------------------------------------
