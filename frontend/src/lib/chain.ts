@@ -24,7 +24,10 @@ export const monadTestnet = defineChain({
 export const wagmiConfig = createConfig({
   chains: [monadTestnet],
   connectors: [injected()],
-  transports: { [monadTestnet.id]: http() },
+  // Poll quickly: Monad blocks are sub-second, so short polling keeps the UI
+  // in step with on-chain state.
+  pollingInterval: 1500,
+  transports: { [monadTestnet.id]: http(undefined, { batch: false }) },
 })
 
 export const EXPLORER_TX = 'https://testnet.monadscan.com/tx/'

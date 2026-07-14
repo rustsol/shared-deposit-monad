@@ -5,9 +5,34 @@
 
 import { useCallback } from 'react'
 import { useWriteContract } from 'wagmi'
-import { waitForTransactionReceipt } from 'wagmi/actions'
+import { getPublicClient } from 'wagmi/actions'
+import type { TransactionReceipt } from 'viem'
 import { wagmiConfig } from '../lib/chain'
 import { useTx } from '../app/TxContext'
+
+// Direct receipt polling. viem's waitForTransactionReceipt relies on a block
+// watcher that stalls against Monad's load-balanced public RPC (the receipt is
+// visible on one backend node while the watcher polls another). Polling
+// getTransactionReceipt directly and tolerating "not found" is reliable there.
+async function pollForReceipt(
+  hash: `0x${string}`,
+  { intervalMs = 1500, timeoutMs = 120_000 }: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<TransactionReceipt> {
+  const client = getPublicClient(wagmiConfig)
+  if (!client) throw new Error('no RPC client available')
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      return await client.getTransactionReceipt({ hash })
+    } catch {
+      // Receipt not found yet (or a stale load-balanced node) — keep waiting.
+      if (Date.now() > deadline) {
+        throw new Error('timed out waiting for the receipt — the transaction may still confirm; check the explorer')
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+}
 
 export interface ContractTxRequest {
   label: string
@@ -54,7 +79,7 @@ export function useContractTx() {
       let receipt
       try {
         update(id, { status: 'pending', hash })
-        receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
+        receipt = await pollForReceipt(hash)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         update(id, { status: 'error', hash, error: message.split('\n')[0] })
