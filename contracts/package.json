@@ -5,10 +5,9 @@
   "description": "SharedDepositEscrow smart contract workspace (Hardhat, Monad)",
   "license": "MIT",
   "scripts": {
-    "precompile": "node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\"",
     "compile": "hardhat compile",
-    "pretest": "node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\"",
     "test": "hardhat test",
+    "typecheck": "tsc --noEmit",
     "lint": "prettier --check --no-error-on-unmatched-pattern \"contracts/**/*.sol\" \"test/**/*.ts\" \"ignition/**/*.ts\" hardhat.config.ts",
     "format": "prettier --write --no-error-on-unmatched-pattern \"contracts/**/*.sol\" \"test/**/*.ts\" \"ignition/**/*.ts\" hardhat.config.ts",
     "node": "hardhat node"
