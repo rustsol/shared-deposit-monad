@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "networkName": "Monad Testnet",
+  "chainId": 10143,
+  "rpcNetworkIdentifier": "monadTestnet",
+  "contractName": "SharedDepositEscrow",
+  "contractAddress": "0x5720c3f77c66527b59f9f63cd3631a3019400910",
+  "deploymentTransactionHash": "0x7620c4ffe9c2f05598f380d09105367de1f39f460b44d3b94ff1d55cff55505b",
+  "deploymentBlockNumber": 44828149,
+  "deploymentWalletAddress": "0x7ab3adf1c8fc4746333e104b6a793f6782d7ba23",
+  "deployedAtUtc": "2026-07-14T11:40:13.000Z",
+  "gitCommitSha": "d1ec2246f0411cf769d7f2096748351b35ae797b",
+  "solcVersion": "0.8.28+commit.7893614a",
+  "optimizer": {
+    "enabled": true,
+    "runs": 200
+  },
+  "evmVersion": "prague",
+  "creationBytecodeHash": "0x73320eebe132ed7f903894a6bd8de4150eafdc5770cb6bdab838403cae9d2efc",
+  "runtimeBytecodeHash": "0x2f5db2e55a9aeebe3747bfc920c486fb6aa49ea8d53242e7390e0100bc9ba988",
+  "abiHash": "0x35941bc74df3ac8780df752ffdc8ad8cf6e1d9d8aab2979887ea907bb7bbc040",
+  "sourceVerification": {
+    "sourcify": "verified_full_match",
+    "sourcifyUrl": "https://testnet.monadvision.com/contracts/full_match/10143/0x5720c3f77c66527b59f9f63cd3631a3019400910/",
+    "monadscan": "not_verified_missing_optional_etherscan_api_key"
+  },
+  "explorers": {
+    "monadvisionContractUrl": "https://testnet.monadvision.com/address/0x5720c3f77c66527b59f9f63cd3631a3019400910",
+    "monadscanContractUrl": "https://testnet.monadscan.com/address/0x5720c3f77c66527b59f9f63cd3631a3019400910",
+    "deploymentTxMonadscanUrl": "https://testnet.monadscan.com/tx/0x7620c4ffe9c2f05598f380d09105367de1f39f460b44d3b94ff1d55cff55505b"
+  }
+}

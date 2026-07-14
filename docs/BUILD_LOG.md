@@ -249,3 +249,36 @@ No evidence upload/serving, no contract RPC/ABI code, no event indexer, no agree
 ### Next phase
 
 Phase 6 — evidence storage and/or event indexing (docs/03 Phase 5 content), pending explicit approval and scope choice.
+
+---
+
+## 2026-07-14 (Phase 6, part 1): REAL Monad Testnet deployment
+
+Strategy change approved by the owner: Phase 6 delivers the visible end-to-end
+browser slice. Deployment method: the owner explicitly chose CLI deployment
+(Option B) using a deployer key placed by the owner in the gitignored
+`contracts/.env` (never committed, never printed, never logged; the tracked
+`.env.example` was restored to blank placeholders). This supersedes the
+browser-wallet deployment-page flow described in the phase instructions; the
+security corrections were applied and the owner was advised to treat the key
+as testnet-only.
+
+### Verified deployment (all values real, from the Monad Testnet receipt)
+
+| Field | Value |
+|---|---|
+| Contract | `0x5720c3f77c66527b59f9f63cd3631a3019400910` |
+| Deployment tx | `0x7620c4ffe9c2f05598f380d09105367de1f39f460b44d3b94ff1d55cff55505b` |
+| Block | 44,828,149 |
+| Deployer (gas only, no authority) | `0x7ab3adf1c8fc4746333e104b6a793f6782d7ba23` |
+| Gas used | 3,670,211 (~0.374 MON at 102 gwei) |
+| Chain ID | 10143 (verified from RPC before sending) |
+| Compiler | solc 0.8.28+commit.7893614a, optimizer 200 runs, evm prague |
+| Runtime bytecode | keccak `0x2f5db2e5…ba988` — **exact match with the compiled artifact** (checked via eth_getCode) |
+| Source verification | **Sourcify: verified, full match** (testnet.monadvision.com); Monadscan: not verified — optional ETHERSCAN_API_KEY absent (reported, not faked) |
+
+Deployment preconditions checked by the script: RPC chain ID 10143, live gas
+estimate (no hardcoded values), deployer balance covers estimated cost,
+existing-deployment guard (refuses silent redeploys; archives records only
+when the chain shows no code). Full metadata:
+`contracts/deployments/monad-testnet.json` (public values only).
