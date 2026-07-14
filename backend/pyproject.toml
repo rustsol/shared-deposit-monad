@@ -56,3 +56,5 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Make `tests.conftest` importable identically on local Windows and CI Linux.
+pythonpath = ["."]
