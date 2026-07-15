@@ -11,10 +11,64 @@
 
 import { useCallback } from 'react'
 import { useAccount, useChainId, useWriteContract } from 'wagmi'
-import { getPublicClient, simulateContract } from 'wagmi/actions'
-import { BaseError, ContractFunctionRevertedError, type TransactionReceipt } from 'viem'
+import { getConnectorClient, getPublicClient, simulateContract } from 'wagmi/actions'
+import { BaseError, ContractFunctionRevertedError, type EIP1193Provider, type TransactionReceipt } from 'viem'
 import { monadTestnet, wagmiConfig } from '../lib/chain'
+import { classifyPropagation } from '../lib/diagnostics'
 import { useTx } from '../app/TxContext'
+
+// Is the transaction observable through a given provider yet?
+async function appSeesTx(hash: `0x${string}`): Promise<boolean> {
+  const client = getPublicClient(wagmiConfig)
+  if (!client) return false
+  try {
+    await client.getTransaction({ hash })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function walletSeesTx(hash: `0x${string}`): Promise<boolean> {
+  try {
+    const client = await getConnectorClient(wagmiConfig)
+    const provider = client.transport as unknown as EIP1193Provider
+    const tx = await provider.request({
+      method: 'eth_getTransactionByHash',
+      params: [hash],
+    } as never)
+    return tx != null
+  } catch {
+    return false
+  }
+}
+
+const PROPAGATION_WINDOW_MS = 15_000
+const PROPAGATION_EXTENDED_MS = 30_000
+
+/** Confirms the wallet actually broadcast the transaction to Monad Testnet by
+ *  checking BOTH the official RPC and the injected wallet provider. Returns
+ *  when the official RPC sees it (proceed to receipt polling) or a terminal
+ *  propagation outcome is reached. */
+async function confirmPropagation(hash: `0x${string}`): Promise<
+  'APP_CONFIRMED' | 'BROADCAST_FAILED_NOT_PROPAGATED' | 'WALLET_RPC_DIVERGED'
+> {
+  const start = Date.now()
+  for (;;) {
+    const [appSeen, walletSeen] = await Promise.all([appSeesTx(hash), walletSeesTx(hash)])
+    const decision = classifyPropagation({
+      walletSeen,
+      appSeen,
+      elapsedMs: Date.now() - start,
+      windowMs: PROPAGATION_WINDOW_MS,
+      extendedMs: PROPAGATION_EXTENDED_MS,
+    })
+    if (decision === 'APP_CONFIRMED') return 'APP_CONFIRMED'
+    if (decision === 'BROADCAST_FAILED_NOT_PROPAGATED') return 'BROADCAST_FAILED_NOT_PROPAGATED'
+    if (decision === 'WALLET_RPC_DIVERGED') return 'WALLET_RPC_DIVERGED'
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+  }
+}
 
 type Classification =
   | { kind: 'mined_success'; receipt: TransactionReceipt }
@@ -260,7 +314,33 @@ export function useContractTx() {
         return null
       }
 
-      update(id, { status: 'BROADCAST', hash })
+      // A returned hash is only a REQUEST. Prove propagation through both the
+      // official RPC and the injected wallet provider before showing pending.
+      update(id, { status: 'BROADCAST_REQUESTED', hash })
+      const propagation = await confirmPropagation(hash)
+      if (propagation === 'BROADCAST_FAILED_NOT_PROPAGATED') {
+        update(id, {
+          status: 'BROADCAST_FAILED_NOT_PROPAGATED',
+          hash,
+          error:
+            'your wallet returned a transaction hash, but the transaction was not broadcast to ' +
+            'Monad Testnet (neither the official RPC nor the wallet provider can see it). Your ' +
+            "wallet's saved Monad Testnet RPC is broken — recheck the network panel and switch " +
+            'to Monad Testnet, or remove and re-add the network with https://testnet-rpc.monad.xyz.',
+        })
+        return null
+      }
+      if (propagation === 'WALLET_RPC_DIVERGED') {
+        update(id, {
+          status: 'WALLET_RPC_DIVERGED',
+          hash,
+          error:
+            'the wallet broadcast to a different node than the official Monad RPC, which cannot ' +
+            'see the transaction. Retry status to re-check, or fix the wallet network.',
+        })
+        return null
+      }
+      // APP_CONFIRMED: the official RPC sees it → normal receipt polling.
       update(id, { status: 'PENDING_ONCHAIN', hash })
       const result = await pollClassify(hash, POLL_TIMEOUT_MS)
       const ok = await applyClassification(id, hash, result, request.verify)

@@ -12,7 +12,14 @@ import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from './AuthContext'
 import { describeTxStatus, isTerminal, useTx } from './TxContext'
 
-const RESOLVING_STATUSES = ['BROADCAST', 'PENDING_ONCHAIN', 'REFRESHING_CONTRACT_STATE']
+const RESOLVING_STATUSES = [
+  'BROADCAST_REQUESTED',
+  'BROADCAST',
+  'PENDING_ONCHAIN',
+  'APPLICATION_RPC_DELAYED',
+  'WALLET_RPC_DIVERGED',
+  'REFRESHING_CONTRACT_STATE',
+]
 
 export function WalletStatus() {
   const { address, isConnected } = useAccount()
@@ -67,15 +74,19 @@ const STATUS_CLASS: Record<string, string> = {
   VERIFIED: 'verified',
   MINED_REVERTED: 'reverted',
   MINED_SUCCESS: 'pending',
+  BROADCAST_REQUESTED: 'broadcast',
   BROADCAST: 'broadcast',
   PENDING_ONCHAIN: 'pending',
   NONCE_BLOCKED: 'reverted',
+  APPLICATION_RPC_DELAYED: 'pending',
   REFRESHING_CONTRACT_STATE: 'pending',
   WAITING_FOR_WALLET: 'waiting-for-wallet',
   TIMEOUT_OR_RPC_ERROR: 'reverted',
   USER_REJECTED: 'reverted',
   REPLACED: 'reverted',
   NOT_FOUND: 'reverted',
+  BROADCAST_FAILED_NOT_PROPAGATED: 'reverted',
+  WALLET_RPC_DIVERGED: 'reverted',
   PREPARING: 'pending',
 }
 

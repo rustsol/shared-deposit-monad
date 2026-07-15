@@ -13,6 +13,7 @@ export type TxStatus =
   | 'PREPARING'
   | 'WAITING_FOR_WALLET'
   | 'USER_REJECTED'
+  | 'BROADCAST_REQUESTED'
   | 'BROADCAST'
   | 'PENDING_ONCHAIN'
   | 'NONCE_BLOCKED'
@@ -22,6 +23,9 @@ export type TxStatus =
   | 'VERIFIED'
   | 'REPLACED'
   | 'NOT_FOUND'
+  | 'BROADCAST_FAILED_NOT_PROPAGATED'
+  | 'WALLET_RPC_DIVERGED'
+  | 'APPLICATION_RPC_DELAYED'
   | 'TIMEOUT_OR_RPC_ERROR'
 
 export interface TxEntry {
@@ -62,6 +66,7 @@ export const TERMINAL_STATUSES: TxStatus[] = [
   'VERIFIED',
   'REPLACED',
   'NOT_FOUND',
+  'BROADCAST_FAILED_NOT_PROPAGATED',
 ]
 
 export function isTerminal(status: TxStatus): boolean {
@@ -185,6 +190,7 @@ export function describeTxStatus(status: TxStatus): string {
     PREPARING: 'Preparing',
     WAITING_FOR_WALLET: 'Waiting for wallet…',
     USER_REJECTED: 'Rejected in wallet',
+    BROADCAST_REQUESTED: 'Broadcast requested — confirming propagation…',
     BROADCAST: 'Broadcast',
     PENDING_ONCHAIN: 'Pending onchain',
     NONCE_BLOCKED: 'Waiting behind an earlier wallet transaction',
@@ -194,6 +200,9 @@ export function describeTxStatus(status: TxStatus): string {
     VERIFIED: 'Verified',
     REPLACED: 'Replaced by a newer transaction',
     NOT_FOUND: 'Not found on Monad Testnet',
+    BROADCAST_FAILED_NOT_PROPAGATED: 'Not broadcast to Monad Testnet',
+    WALLET_RPC_DIVERGED: 'Wallet RPC diverged from the network',
+    APPLICATION_RPC_DELAYED: 'Confirming on the official RPC…',
     TIMEOUT_OR_RPC_ERROR: 'Timed out — retry status',
   }
   return labels[status]

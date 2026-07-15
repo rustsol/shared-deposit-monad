@@ -12,12 +12,19 @@ describe('transaction state model', () => {
       'PREPARING',
       'WAITING_FOR_WALLET',
       'USER_REJECTED',
+      'BROADCAST_REQUESTED',
       'BROADCAST',
       'PENDING_ONCHAIN',
+      'NONCE_BLOCKED',
       'MINED_SUCCESS',
       'MINED_REVERTED',
       'REFRESHING_CONTRACT_STATE',
       'VERIFIED',
+      'REPLACED',
+      'NOT_FOUND',
+      'BROADCAST_FAILED_NOT_PROPAGATED',
+      'WALLET_RPC_DIVERGED',
+      'APPLICATION_RPC_DELAYED',
       'TIMEOUT_OR_RPC_ERROR',
     ] as const
     for (const state of states) {
@@ -32,6 +39,18 @@ describe('transaction state model', () => {
     expect(TERMINAL_STATUSES).not.toContain('BROADCAST')
     expect(TERMINAL_STATUSES).not.toContain('PENDING_ONCHAIN')
     expect(TERMINAL_STATUSES).not.toContain('MINED_SUCCESS')
+  })
+
+  test('a non-propagated broadcast is terminal (releases the lock); a diverged one is not', () => {
+    // If neither RPC ever sees the tx, the action is over — the user must fix
+    // the wallet network and start again, so the lock must release.
+    expect(TERMINAL_STATUSES).toContain('BROADCAST_FAILED_NOT_PROPAGATED')
+    // A diverged tx may still be real onchain, so it keeps the lock until receipt.
+    expect(TERMINAL_STATUSES).not.toContain('WALLET_RPC_DIVERGED')
+    expect(TERMINAL_STATUSES).not.toContain('BROADCAST_REQUESTED')
+    expect(describeTxStatus('BROADCAST_FAILED_NOT_PROPAGATED')).not.toBe(
+      describeTxStatus('VERIFIED'),
+    )
   })
 
   test('a broadcast hash is described as Broadcast, never Verified', () => {
