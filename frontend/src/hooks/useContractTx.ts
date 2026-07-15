@@ -1,10 +1,13 @@
 // One shared path for every real contract write, driving the conceptual
-// transaction-state model. A returned hash is only BROADCAST; a receipt makes
-// it MINED_SUCCESS/MINED_REVERTED; VERIFIED requires the caller's direct
-// contract-state check to pass. Receipts are polled directly (viem's block
-// watcher stalls against Monad's load-balanced RPC), with a bounded timeout
-// that surfaces TIMEOUT_OR_RPC_ERROR + Retry instead of hanging forever or
-// falsely reporting failure.
+// transaction-state model with a single-flight action lock and honest
+// reconciliation.
+//
+// A returned hash is only BROADCAST. Receipt success + a direct contract-state
+// check makes it VERIFIED. A transaction that never becomes observable is
+// classified NOT_FOUND (terminal) rather than left pending forever. A pending
+// transaction whose nonce sits ahead of the sender's latest nonce is
+// NONCE_BLOCKED. Every write is preceded by a simulate() preflight, so a call
+// that would revert never opens a transaction state or prompts the wallet.
 
 import { useCallback } from 'react'
 import { useAccount, useChainId, useWriteContract } from 'wagmi'
@@ -13,16 +16,76 @@ import { BaseError, ContractFunctionRevertedError, type TransactionReceipt } fro
 import { monadTestnet, wagmiConfig } from '../lib/chain'
 import { useTx } from '../app/TxContext'
 
-async function fetchReceiptOnce(hash: `0x${string}`): Promise<TransactionReceipt | null> {
+type Classification =
+  | { kind: 'mined_success'; receipt: TransactionReceipt }
+  | { kind: 'mined_reverted'; receipt: TransactionReceipt }
+  | { kind: 'nonce_blocked'; nonce: number; latest: number }
+  | { kind: 'pending' }
+  | { kind: 'not_found' }
+
+async function inspectOnce(hash: `0x${string}`): Promise<Classification> {
   const client = getPublicClient(wagmiConfig)
   if (!client) throw new Error('no RPC client available')
   if (client.chain?.id !== monadTestnet.id) {
     throw new Error(`RPC client is on the wrong chain (${client.chain?.id})`)
   }
+  // Receipt is authoritative when present.
+  let receipt: TransactionReceipt | null = null
   try {
-    return await client.getTransactionReceipt({ hash })
+    receipt = await client.getTransactionReceipt({ hash })
   } catch {
-    return null // not found yet, or a stale load-balanced node
+    receipt = null
+  }
+  if (receipt) {
+    return receipt.status === 'success'
+      ? { kind: 'mined_success', receipt }
+      : { kind: 'mined_reverted', receipt }
+  }
+  // No receipt yet: is the transaction even in the mempool?
+  try {
+    const tx = await client.getTransaction({ hash })
+    const latest = await client.getTransactionCount({ address: tx.from, blockTag: 'latest' })
+    if (Number(tx.nonce) > latest) {
+      return { kind: 'nonce_blocked', nonce: Number(tx.nonce), latest }
+    }
+    return { kind: 'pending' }
+  } catch {
+    // getTransaction throws when the node has never seen the hash.
+    return { kind: 'not_found' }
+  }
+}
+
+const POLL_INTERVAL_MS = 1500
+const POLL_TIMEOUT_MS = 60_000
+const RECOVERY_WINDOW_MS = 25_000
+
+/** Polls until a definitive classification or the window elapses. A hash never
+ *  observed across the whole window is NOT_FOUND; one seen pending but not
+ *  mined is a timeout (still genuinely pending). */
+async function pollClassify(hash: `0x${string}`, windowMs: number): Promise<Classification> {
+  const deadline = Date.now() + windowMs
+  let everSeen = false
+  for (;;) {
+    let current: Classification | null = null
+    try {
+      current = await inspectOnce(hash)
+    } catch {
+      current = null // transient RPC error: treat as propagation delay, keep polling
+    }
+    if (
+      current &&
+      (current.kind === 'mined_success' ||
+        current.kind === 'mined_reverted' ||
+        current.kind === 'nonce_blocked')
+    ) {
+      return current
+    }
+    if (current && current.kind === 'pending') everSeen = true
+    if (Date.now() > deadline) {
+      if (everSeen) return { kind: 'pending' } // genuinely pending → timeout
+      return current && current.kind === 'not_found' ? { kind: 'not_found' } : { kind: 'pending' }
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
   }
 }
 
@@ -30,17 +93,19 @@ function friendlyWriteError(message: string): string {
   if (/insufficient funds/i.test(message)) {
     return 'this wallet has no MON to pay gas. Fund it with a little Monad Testnet MON and try again. (Deposit recipients do not deposit funds, but every wallet still needs a little MON for gas.)'
   }
+  if (/does not match|chain id|wrong chain/i.test(message)) {
+    return 'the wallet is not on Monad Testnet (chain 10143). Switch networks and try again.'
+  }
   return message.split('\n')[0]
 }
 
-/** Decodes a simulate/preflight revert into a plain reason where possible. */
 function decodeRevert(error: unknown): string | null {
   if (error instanceof BaseError) {
     const revert = error.walk((e) => e instanceof ContractFunctionRevertedError)
     if (revert instanceof ContractFunctionRevertedError) {
       return revert.data?.errorName ?? revert.reason ?? revert.shortMessage
     }
-    if (/insufficient funds/i.test(error.message)) return null // not a revert
+    if (/insufficient funds/i.test(error.message)) return null
     return error.shortMessage
   }
   return null
@@ -53,24 +118,90 @@ export interface ContractTxRequest {
   abi: readonly unknown[]
   args: readonly unknown[]
   value?: bigint
+  /** Single-flight key; while an entry with this key is non-terminal, the
+   *  action is locked and further sends are refused. */
+  actionKey?: string
+  agreementId?: string
   /** Direct contract-state check; VERIFIED requires it to resolve true. */
   verify?: (hash: `0x${string}`) => Promise<boolean>
 }
-
-const POLL_INTERVAL_MS = 1500
-const POLL_TIMEOUT_MS = 90_000
 
 export function useContractTx() {
   const { writeContractAsync } = useWriteContract()
   const { address: account } = useAccount()
   const chainId = useChainId()
-  const { track, update } = useTx()
+  const { track, update, isActionLocked } = useTx()
+
+  const applyClassification = useCallback(
+    async (
+      id: string,
+      hash: `0x${string}`,
+      result: Classification,
+      verify?: (hash: `0x${string}`) => Promise<boolean>,
+    ): Promise<boolean> => {
+      switch (result.kind) {
+        case 'mined_reverted':
+          update(id, { status: 'MINED_REVERTED', hash, error: 'transaction reverted onchain' })
+          return false
+        case 'nonce_blocked':
+          update(id, {
+            status: 'NONCE_BLOCKED',
+            hash,
+            error: `waiting behind an earlier wallet transaction (this nonce ${result.nonce}, wallet at ${result.latest}). Resolve or cancel the earlier transaction in your wallet.`,
+          })
+          return false
+        case 'not_found':
+          update(id, {
+            status: 'NOT_FOUND',
+            hash,
+            error:
+              'the wallet returned a hash but the network never received the transaction. This usually means the wallet is on a broken Monad RPC — set it to https://testnet-rpc.monad.xyz, then try again.',
+          })
+          return false
+        case 'pending':
+          update(id, {
+            status: 'TIMEOUT_OR_RPC_ERROR',
+            hash,
+            error: 'still pending — retry status to re-check, or view on the explorer.',
+          })
+          return false
+        case 'mined_success': {
+          update(id, { status: 'MINED_SUCCESS', hash })
+          if (verify) {
+            update(id, { status: 'REFRESHING_CONTRACT_STATE', hash })
+            try {
+              if (!(await verify(hash))) {
+                update(id, {
+                  status: 'TIMEOUT_OR_RPC_ERROR',
+                  hash,
+                  error: 'mined, but the expected contract state change was not observed',
+                })
+                return false
+              }
+            } catch (error) {
+              update(id, {
+                status: 'TIMEOUT_OR_RPC_ERROR',
+                hash,
+                error: error instanceof Error ? error.message : String(error),
+              })
+              return false
+            }
+          }
+          update(id, { status: 'VERIFIED', hash })
+          return true
+        }
+      }
+    },
+    [update],
+  )
 
   const send = useCallback(
     async (request: ContractTxRequest): Promise<`0x${string}` | null> => {
-      // Preflight simulation with the exact caller and args. If the call would
-      // revert, we surface the decoded reason and NEVER open a transaction
-      // state or persist a hash — the wallet is not even asked to sign.
+      // Single-flight: refuse if an unresolved action already exists.
+      if (request.actionKey && isActionLocked(request.actionKey)) return null
+
+      // Preflight simulation with the exact caller/args. A would-revert is shown
+      // and NEVER opens a transaction state or prompts the wallet.
       try {
         await simulateContract(wagmiConfig, {
           account,
@@ -89,12 +220,13 @@ export function useContractTx() {
             status: 'MINED_REVERTED',
             chainId,
             contractAddress: request.address,
+            agreementId: request.agreementId,
             submittedAt: Date.now(),
             error: `would revert: ${revert} — not submitted`,
           })
           return null
         }
-        // Not a revert (e.g. RPC hiccup): fall through and let the wallet try.
+        // Not a decodable revert (e.g. transient RPC): let the wallet try.
       }
 
       const id = track({
@@ -103,6 +235,8 @@ export function useContractTx() {
         status: 'WAITING_FOR_WALLET',
         chainId,
         contractAddress: request.address,
+        agreementId: request.agreementId,
+        actionKey: request.actionKey,
         connectedWallet: account,
         submittedAt: Date.now(),
       })
@@ -121,102 +255,28 @@ export function useContractTx() {
         if (/reject|denied/i.test(message)) {
           update(id, { status: 'USER_REJECTED' })
         } else {
-          // No hash was produced: never show Broadcast/Pending/Mined.
           update(id, { status: 'TIMEOUT_OR_RPC_ERROR', error: friendlyWriteError(message) })
         }
         return null
       }
 
       update(id, { status: 'BROADCAST', hash })
-
-      // Poll for the receipt directly with a bounded timeout.
       update(id, { status: 'PENDING_ONCHAIN', hash })
-      const deadline = Date.now() + POLL_TIMEOUT_MS
-      let receipt: TransactionReceipt | null = null
-      for (;;) {
-        try {
-          receipt = await fetchReceiptOnce(hash)
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', hash, error: message })
-          return null
-        }
-        if (receipt) break
-        if (Date.now() > deadline) {
-          // Preserve the hash; this is NOT a failure — it may still confirm.
-          update(id, {
-            status: 'TIMEOUT_OR_RPC_ERROR',
-            hash,
-            error: 'still pending — check the explorer or retry status',
-          })
-          return null
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
-      }
-
-      if (receipt.status !== 'success') {
-        update(id, { status: 'MINED_REVERTED', hash, error: 'transaction reverted onchain' })
-        return null
-      }
-      update(id, { status: 'MINED_SUCCESS', hash })
-
-      if (request.verify) {
-        update(id, { status: 'REFRESHING_CONTRACT_STATE', hash })
-        try {
-          const ok = await request.verify(hash)
-          if (!ok) {
-            // Receipt success but the expected state change is not visible:
-            // do NOT claim VERIFIED — surface it as a real problem.
-            update(id, {
-              status: 'TIMEOUT_OR_RPC_ERROR',
-              hash,
-              error: 'mined, but the expected contract state change was not observed',
-            })
-            return null
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', hash, error: message })
-          return null
-        }
-      }
-      update(id, { status: 'VERIFIED', hash })
-      return hash
+      const result = await pollClassify(hash, POLL_TIMEOUT_MS)
+      const ok = await applyClassification(id, hash, result, request.verify)
+      return ok ? hash : null
     },
-    [account, chainId, track, update, writeContractAsync],
+    [account, chainId, isActionLocked, track, update, writeContractAsync, applyClassification],
   )
 
-  /** Resume/retry receipt polling for a recovered or timed-out transaction,
-   *  using the exact same real hash. A shorter window keeps recovery snappy;
-   *  a still-missing transaction is reported honestly, not left pending. */
+  /** Re-check an existing hash (recovery/retry). Never calls writeContract. */
   const retryReceipt = useCallback(
-    async (id: string, hash: `0x${string}`, windowMs = POLL_TIMEOUT_MS): Promise<void> => {
+    async (id: string, hash: `0x${string}`, windowMs = RECOVERY_WINDOW_MS): Promise<void> => {
       update(id, { status: 'PENDING_ONCHAIN', hash })
-      const deadline = Date.now() + windowMs
-      for (;;) {
-        const receipt = await fetchReceiptOnce(hash).catch(() => null)
-        if (receipt) {
-          update(id, {
-            status: receipt.status === 'success' ? 'VERIFIED' : 'MINED_REVERTED',
-            hash,
-            error: receipt.status === 'success' ? undefined : 'transaction reverted onchain',
-          })
-          return
-        }
-        if (Date.now() > deadline) {
-          update(id, {
-            status: 'TIMEOUT_OR_RPC_ERROR',
-            hash,
-            error:
-              'not found on Monad Testnet. It may have failed to broadcast (for example, the ' +
-              'wallet had no MON for gas). Retry to re-check, or dismiss.',
-          })
-          return
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
-      }
+      const result = await pollClassify(hash, windowMs)
+      await applyClassification(id, hash, result)
     },
-    [update],
+    [update, applyClassification],
   )
 
   return { send, retryReceipt }

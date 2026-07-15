@@ -10,15 +10,9 @@ import { TxRecovery } from '../components/TxRecovery'
 import { WalletPicker } from '../components/WalletPicker'
 import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from './AuthContext'
-import { describeTxStatus, useTx } from './TxContext'
+import { describeTxStatus, isTerminal, useTx } from './TxContext'
 
 const RESOLVING_STATUSES = ['BROADCAST', 'PENDING_ONCHAIN', 'REFRESHING_CONTRACT_STATE']
-const DISMISSABLE_STATUSES = [
-  'VERIFIED',
-  'MINED_REVERTED',
-  'USER_REJECTED',
-  'TIMEOUT_OR_RPC_ERROR',
-]
 
 export function WalletStatus() {
   const { address, isConnected } = useAccount()
@@ -75,53 +69,59 @@ const STATUS_CLASS: Record<string, string> = {
   MINED_SUCCESS: 'pending',
   BROADCAST: 'broadcast',
   PENDING_ONCHAIN: 'pending',
+  NONCE_BLOCKED: 'reverted',
   REFRESHING_CONTRACT_STATE: 'pending',
   WAITING_FOR_WALLET: 'waiting-for-wallet',
   TIMEOUT_OR_RPC_ERROR: 'reverted',
   USER_REJECTED: 'reverted',
+  REPLACED: 'reverted',
+  NOT_FOUND: 'reverted',
   PREPARING: 'pending',
 }
 
 function TxDrawer() {
-  const { transactions, remove, clear } = useTx()
+  const { transactions, remove, hide, clear } = useTx()
   const { retryReceipt } = useContractTx()
-  if (transactions.length === 0) return null
+  const visible = transactions.filter((entry) => !entry.hidden)
+  if (visible.length === 0) return null
   return (
     <aside className="tx-drawer" aria-live="polite" aria-label="Transaction status">
-      {transactions.slice(0, 4).map((entry) => (
-        <div key={entry.id} className={`tx-entry ${STATUS_CLASS[entry.status] ?? ''}`}>
-          <strong>{entry.label}</strong>
-          <div className="small muted">
-            {entry.functionName} · {describeTxStatus(entry.status)}
-          </div>
-          {entry.hash && (
-            <a className="small mono" href={`${EXPLORER_TX}${entry.hash}`} target="_blank" rel="noreferrer">
-              {shortAddress(entry.hash)} ↗
-            </a>
-          )}
-          {entry.error && <div className="small field-error">{entry.error}</div>}
-          {/* Any non-terminal pending state can always be re-checked or
-              dismissed, so a transaction can never be a permanent dead end. */}
-          {(entry.status === 'TIMEOUT_OR_RPC_ERROR' ||
-            RESOLVING_STATUSES.includes(entry.status)) &&
-            entry.hash && (
+      {visible.slice(0, 4).map((entry) => {
+        const terminal = isTerminal(entry.status)
+        return (
+          <div key={entry.id} className={`tx-entry ${STATUS_CLASS[entry.status] ?? ''}`}>
+            <strong>{entry.label}</strong>
+            <div className="small muted">
+              {entry.functionName} · {describeTxStatus(entry.status)}
+            </div>
+            {entry.hash && (
+              <a className="small mono" href={`${EXPLORER_TX}${entry.hash}`} target="_blank" rel="noreferrer">
+                {shortAddress(entry.hash)} ↗
+              </a>
+            )}
+            {entry.error && <div className="small field-error">{entry.error}</div>}
+            {/* Retry only re-queries the existing hash — never writeContract. */}
+            {entry.hash && (entry.status === 'TIMEOUT_OR_RPC_ERROR' || RESOLVING_STATUSES.includes(entry.status)) && (
               <button
                 className="secondary small"
                 onClick={() => void retryReceipt(entry.id, entry.hash as `0x${string}`)}
               >
                 Retry status
               </button>
-            )}
-          {(DISMISSABLE_STATUSES.includes(entry.status) ||
-            RESOLVING_STATUSES.includes(entry.status)) && (
-            <button className="secondary small" onClick={() => remove(entry.id)}>
+            )}{' '}
+            {/* Terminal entries are removed; non-terminal ones are only HIDDEN
+                so the single-flight action lock is never released by Dismiss. */}
+            <button
+              className="secondary small"
+              onClick={() => (terminal ? remove(entry.id) : hide(entry.id))}
+            >
               Dismiss
             </button>
-          )}
-        </div>
-      ))}
+          </div>
+        )
+      })}
       <button className="secondary small" onClick={clear}>
-        Clear all
+        Clear resolved
       </button>
     </aside>
   )
