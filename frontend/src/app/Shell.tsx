@@ -1,11 +1,12 @@
 // Application shell: header, navigation, wallet/network/auth status, the
 // persistent transaction drawer, and the global error boundary.
 
-import { Component, type ReactNode } from 'react'
+import { Component, useState, type ReactNode } from 'react'
 import { Link, Outlet } from 'react-router-dom'
-import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from 'wagmi'
+import { useAccount, useChainId, useDisconnect, useSwitchChain } from 'wagmi'
 import { monadTestnet, EXPLORER_TX } from '../lib/chain'
 import { shortAddress } from '../lib/format'
+import { WalletPicker } from '../components/WalletPicker'
 import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from './AuthContext'
 import { describeTxStatus, useTx } from './TxContext'
@@ -13,20 +14,18 @@ import { describeTxStatus, useTx } from './TxContext'
 export function WalletStatus() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const { switchChain } = useSwitchChain()
-  const injectedConnector = connectors[0]
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   if (!isConnected) {
     return (
-      <button
-        className="secondary"
-        disabled={!injectedConnector || isPending}
-        onClick={() => injectedConnector && connect({ connector: injectedConnector })}
-      >
-        {isPending ? 'Connecting…' : 'Connect wallet'}
-      </button>
+      <>
+        <button className="secondary" onClick={() => setPickerOpen(true)}>
+          Connect wallet
+        </button>
+        {pickerOpen && <WalletPicker onClose={() => setPickerOpen(false)} />}
+      </>
     )
   }
   return (
