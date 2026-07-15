@@ -6,10 +6,19 @@ import { Link, Outlet } from 'react-router-dom'
 import { useAccount, useChainId, useDisconnect, useSwitchChain } from 'wagmi'
 import { monadTestnet, EXPLORER_TX } from '../lib/chain'
 import { shortAddress } from '../lib/format'
+import { TxRecovery } from '../components/TxRecovery'
 import { WalletPicker } from '../components/WalletPicker'
 import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from './AuthContext'
 import { describeTxStatus, useTx } from './TxContext'
+
+const RESOLVING_STATUSES = ['BROADCAST', 'PENDING_ONCHAIN', 'REFRESHING_CONTRACT_STATE']
+const DISMISSABLE_STATUSES = [
+  'VERIFIED',
+  'MINED_REVERTED',
+  'USER_REJECTED',
+  'TIMEOUT_OR_RPC_ERROR',
+]
 
 export function WalletStatus() {
   const { address, isConnected } = useAccount()
@@ -91,18 +100,20 @@ function TxDrawer() {
             </a>
           )}
           {entry.error && <div className="small field-error">{entry.error}</div>}
-          {entry.status === 'TIMEOUT_OR_RPC_ERROR' && entry.hash && (
-            <button
-              className="secondary small"
-              onClick={() => void retryReceipt(entry.id, entry.hash as `0x${string}`)}
-            >
-              Retry status
-            </button>
-          )}
-          {(entry.status === 'VERIFIED' ||
-            entry.status === 'MINED_REVERTED' ||
-            entry.status === 'USER_REJECTED' ||
-            entry.status === 'TIMEOUT_OR_RPC_ERROR') && (
+          {/* Any non-terminal pending state can always be re-checked or
+              dismissed, so a transaction can never be a permanent dead end. */}
+          {(entry.status === 'TIMEOUT_OR_RPC_ERROR' ||
+            RESOLVING_STATUSES.includes(entry.status)) &&
+            entry.hash && (
+              <button
+                className="secondary small"
+                onClick={() => void retryReceipt(entry.id, entry.hash as `0x${string}`)}
+              >
+                Retry status
+              </button>
+            )}
+          {(DISMISSABLE_STATUSES.includes(entry.status) ||
+            RESOLVING_STATUSES.includes(entry.status)) && (
             <button className="secondary small" onClick={() => remove(entry.id)}>
               Dismiss
             </button>
@@ -159,6 +170,7 @@ export default function Shell() {
       <ErrorBoundary>
         <Outlet />
       </ErrorBoundary>
+      <TxRecovery />
       <TxDrawer />
     </>
   )
