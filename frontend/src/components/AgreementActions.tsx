@@ -23,6 +23,8 @@ interface Common {
   readAccepted: (kind: 'tenant' | 'recipient') => Promise<boolean>
   /** Reads the connected tenant's exact funded amount from the contract. */
   readFunded: () => Promise<bigint>
+  /** Dual-provider network health gate: no write is allowed unless healthy. */
+  networkHealthy: boolean
 }
 
 const contractOf = (address: `0x${string}`) =>
@@ -82,7 +84,7 @@ export function RecipientAcceptanceCard(props: Common) {
         <>
           <button
             className="primary"
-            disabled={!role.canAcceptAsRecipient || locked}
+            disabled={!role.canAcceptAsRecipient || locked || !props.networkHealthy}
             onClick={() =>
               void send({
                 label: 'Accept as deposit recipient',
@@ -139,7 +141,7 @@ export function TenantAcceptanceCard(props: Common) {
       ) : (
         <button
           className="primary"
-          disabled={!role.canAcceptAsTenant || locked}
+          disabled={!role.canAcceptAsTenant || locked || !props.networkHealthy}
           onClick={() =>
             void send({
               label: 'Accept agreement (tenant)',
@@ -228,14 +230,14 @@ export function TenantFundingCard(props: Common) {
           </label>
           <button
             className="primary"
-            disabled={!role.canDeposit || locked}
+            disabled={!role.canDeposit || locked || !props.networkHealthy}
             onClick={() => void deposit()}
           >
             Deposit
           </button>{' '}
           <button
             className="secondary"
-            disabled={!role.canDeposit || locked}
+            disabled={!role.canDeposit || locked || !props.networkHealthy}
             onClick={() => setAmount(weiToMon(role.remaining))}
           >
             Fill remaining
@@ -300,7 +302,7 @@ export function TenantWithdrawCard(props: Common) {
       </label>
       <button
         className="secondary"
-        disabled={!role.canWithdrawFunding || locked}
+        disabled={!role.canWithdrawFunding || locked || !props.networkHealthy}
         onClick={() => void withdraw()}
       >
         Withdraw

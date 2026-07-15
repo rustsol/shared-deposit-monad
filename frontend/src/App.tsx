@@ -7,6 +7,7 @@ import { TxProvider } from './app/TxContext'
 import { wagmiConfig } from './lib/chain'
 import AgreementDetail from './pages/AgreementDetail'
 import Dashboard from './pages/Dashboard'
+import DeveloperNetwork from './pages/DeveloperNetwork'
 import DraftDetail from './pages/DraftDetail'
 import InvitationReview from './pages/InvitationReview'
 import Landing from './pages/Landing'
@@ -44,6 +45,7 @@ export default function App() {
                     path="/agreements/:chainId/:contractAddress/:agreementId"
                     element={<AgreementDetail />}
                   />
+                  <Route path="/developer/network" element={<DeveloperNetwork />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>

@@ -26,6 +26,8 @@ import {
   type AgreementSnapshot,
   type TenantSnapshot,
 } from '../hooks/useAgreementRole'
+import { NetworkDiagnosticsPanel } from '../components/NetworkDiagnosticsPanel'
+import { useWalletNetworkDiagnostics } from '../hooks/useWalletNetworkDiagnostics'
 
 const STATUS_NAMES = ['NONE', 'FUNDING', 'ACTIVE', 'FINALIZED', 'CANCELLED'] as const
 const TABS = ['Overview', 'Participants & funding', 'Activity', 'Terms & proof'] as const
@@ -102,6 +104,12 @@ export default function AgreementDetail() {
     enabled: authStatus === 'authenticated',
     retry: false,
   })
+
+  // Dual-provider Monad Testnet health. Writes are gated on this being healthy,
+  // so a wallet that reports chain 10143 but broadcasts to a broken RPC cannot
+  // open a transaction.
+  const diagnostics = useWalletNetworkDiagnostics({ contractAddress })
+  const networkHealthy = diagnostics.data?.overallHealth === 'healthy'
 
   const agreement = agreementRead.data as RawAgreement | undefined
 
@@ -199,6 +207,7 @@ export default function AgreementDetail() {
     refetch: refetchAll,
     readAccepted,
     readFunded,
+    networkHealthy,
   }
 
   return (
@@ -328,6 +337,13 @@ export default function AgreementDetail() {
             </p>
           </div>
 
+          {authStatus === 'authenticated' && statusName === 'FUNDING' && role.isParticipant && (
+            <NetworkDiagnosticsPanel
+              data={diagnostics.data}
+              loading={diagnostics.loading}
+              recheck={diagnostics.recheck}
+            />
+          )}
           {authStatus !== 'authenticated' ? (
             <div className="notice">
               <Link to="/login">Sign in</Link> with a participant wallet to act on this agreement.
@@ -340,6 +356,12 @@ export default function AgreementDetail() {
           ) : statusName === 'FUNDING' ? (
             <>
               <WalletMismatchNotice role={role} />
+              {role.isParticipant && !networkHealthy && (
+                <div className="notice warn">
+                  Actions are disabled until the wallet network health above shows{' '}
+                  <strong>Healthy</strong>. Use Recheck / Switch to Monad Testnet.
+                </div>
+              )}
               {role.isRecipient && <RecipientAcceptanceCard {...commonProps} />}
               {role.isTenant && (
                 <>
