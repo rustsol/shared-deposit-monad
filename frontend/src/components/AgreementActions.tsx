@@ -6,8 +6,10 @@
 
 import { useState } from 'react'
 import { monToWei, weiToMon } from '../lib/format'
+import { monadTestnet } from '../lib/chain'
 import type { AgreementRole } from '../hooks/useAgreementRole'
 import { useContractTx } from '../hooks/useContractTx'
+import { makeActionKey, useTx } from '../app/TxContext'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 
 interface Common {
@@ -26,6 +28,17 @@ interface Common {
 const contractOf = (address: `0x${string}`) =>
   ({ address, abi: sharedDepositEscrowAbi }) as const
 
+/** Builds the single-flight action key for a role action on this agreement. */
+function actionKeyFor(props: Common, functionName: string): string {
+  return makeActionKey({
+    chainId: monadTestnet.id,
+    contractAddress: props.contractAddress,
+    agreementId: props.agreementId.toString(),
+    functionName,
+    wallet: props.role.connectedWallet ?? '',
+  })
+}
+
 export function WalletMismatchNotice({ role }: { role: AgreementRole }) {
   if (role.walletMatchesSession) return null
   return (
@@ -41,6 +54,9 @@ export function RecipientAcceptanceCard(props: Common) {
   const { role, recipientAccepted, contractAddress, agreementId, termsHash, refetch, readAccepted } =
     props
   const { send } = useContractTx()
+  const { isActionLocked } = useTx()
+  const key = actionKeyFor(props, 'acceptAsRecipient')
+  const locked = isActionLocked(key)
 
   return (
     <div className="card">
@@ -59,29 +75,39 @@ export function RecipientAcceptanceCard(props: Common) {
         <div className="notice success">Recipient accepted.</div>
       ) : role.fundingDeadlinePassed ? (
         <div className="notice warn">
-          The funding deadline has passed, so recipient acceptance is closed. This
-          agreement can no longer activate and can only be cancelled.
+          Funding deadline passed. This agreement cannot receive additional acceptance or
+          deposits. Create a new agreement with a future funding deadline.
         </div>
       ) : (
-        <button
-          className="primary"
-          disabled={!role.canAcceptAsRecipient}
-          onClick={() =>
-            void send({
-              label: 'Accept as deposit recipient',
-              functionName: 'acceptAsRecipient',
-              ...contractOf(contractAddress),
-              args: [agreementId, termsHash],
-              verify: async () => {
-                const accepted = await readAccepted('recipient')
-                await refetch()
-                return accepted
-              },
-            })
-          }
-        >
-          Accept as deposit recipient
-        </button>
+        <>
+          <button
+            className="primary"
+            disabled={!role.canAcceptAsRecipient || locked}
+            onClick={() =>
+              void send({
+                label: 'Accept as deposit recipient',
+                functionName: 'acceptAsRecipient',
+                actionKey: key,
+                agreementId: agreementId.toString(),
+                ...contractOf(contractAddress),
+                args: [agreementId, termsHash],
+                verify: async () => {
+                  const accepted = await readAccepted('recipient')
+                  await refetch()
+                  return accepted
+                },
+              })
+            }
+          >
+            Accept as deposit recipient
+          </button>
+          {locked && (
+            <p className="muted small">
+              An acceptance attempt is already in progress — see the transaction drawer. This
+              button stays disabled until it resolves.
+            </p>
+          )}
+        </>
       )}
     </div>
   )
@@ -90,6 +116,9 @@ export function RecipientAcceptanceCard(props: Common) {
 export function TenantAcceptanceCard(props: Common) {
   const { role, contractAddress, agreementId, termsHash, refetch, readAccepted } = props
   const { send } = useContractTx()
+  const { isActionLocked } = useTx()
+  const key = actionKeyFor(props, 'acceptAsTenant')
+  const locked = isActionLocked(key)
   if (!role.tenantRecord) return null
 
   if (role.tenantRecord.accepted) {
@@ -104,17 +133,19 @@ export function TenantAcceptanceCard(props: Common) {
       </p>
       {role.fundingDeadlinePassed ? (
         <div className="notice warn">
-          The funding deadline has passed — acceptance is closed and this agreement can
-          only be cancelled.
+          Funding deadline passed. This agreement cannot receive additional acceptance or
+          deposits. Create a new agreement with a future funding deadline.
         </div>
       ) : (
         <button
           className="primary"
-          disabled={!role.canAcceptAsTenant}
+          disabled={!role.canAcceptAsTenant || locked}
           onClick={() =>
             void send({
               label: 'Accept agreement (tenant)',
               functionName: 'acceptAsTenant',
+              actionKey: key,
+              agreementId: agreementId.toString(),
               ...contractOf(contractAddress),
               args: [agreementId, termsHash],
               verify: async () => {
@@ -135,8 +166,11 @@ export function TenantAcceptanceCard(props: Common) {
 export function TenantFundingCard(props: Common) {
   const { role, contractAddress, agreementId, refetch, readFunded } = props
   const { send } = useContractTx()
+  const { isActionLocked } = useTx()
   const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const key = actionKeyFor(props, 'deposit')
+  const locked = isActionLocked(key)
 
   const tenant = role.tenantRecord
   if (!tenant || !tenant.accepted) return null
@@ -157,6 +191,8 @@ export function TenantFundingCard(props: Common) {
     await send({
       label: `Deposit ${amount} MON`,
       functionName: 'deposit',
+      actionKey: key,
+      agreementId: agreementId.toString(),
       ...contractOf(contractAddress),
       args: [agreementId],
       value,
@@ -190,12 +226,16 @@ export function TenantFundingCard(props: Common) {
             <span className="name">Amount (MON)</span>
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
           </label>
-          <button className="primary" disabled={!role.canDeposit} onClick={() => void deposit()}>
+          <button
+            className="primary"
+            disabled={!role.canDeposit || locked}
+            onClick={() => void deposit()}
+          >
             Deposit
           </button>{' '}
           <button
             className="secondary"
-            disabled={!role.canDeposit}
+            disabled={!role.canDeposit || locked}
             onClick={() => setAmount(weiToMon(role.remaining))}
           >
             Fill remaining
@@ -210,8 +250,11 @@ export function TenantFundingCard(props: Common) {
 export function TenantWithdrawCard(props: Common) {
   const { role, contractAddress, agreementId, refetch, readFunded } = props
   const { send } = useContractTx()
+  const { isActionLocked } = useTx()
   const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const key = actionKeyFor(props, 'withdrawFundingBeforeActivation')
+  const locked = isActionLocked(key)
 
   const tenant = role.tenantRecord
   if (!tenant || tenant.fundedAmount === 0n) return null
@@ -231,6 +274,8 @@ export function TenantWithdrawCard(props: Common) {
     await send({
       label: `Withdraw ${amount} MON (pre-activation)`,
       functionName: 'withdrawFundingBeforeActivation',
+      actionKey: key,
+      agreementId: agreementId.toString(),
       ...contractOf(contractAddress),
       args: [agreementId, value],
       verify: async () => {
@@ -253,7 +298,11 @@ export function TenantWithdrawCard(props: Common) {
         <span className="name">Amount (MON)</span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
       </label>
-      <button className="secondary" disabled={!role.canWithdrawFunding} onClick={() => void withdraw()}>
+      <button
+        className="secondary"
+        disabled={!role.canWithdrawFunding || locked}
+        onClick={() => void withdraw()}
+      >
         Withdraw
       </button>
       {error && <div className="notice error">{error}</div>}

@@ -7,7 +7,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { isAddress } from 'viem'
 import { useAuth } from '../app/AuthContext'
 import { api, ApiError } from '../lib/api'
-import { monToWei } from '../lib/format'
+import { fundingDeadlineWarning, monToWei } from '../lib/format'
 
 const STEPS = ['Basics', 'Participants', 'Contributions', 'Rules & dates', 'Review'] as const
 
@@ -197,6 +197,12 @@ export default function NewAgreement() {
               <input type="datetime-local" value={settlementDeadline} onChange={(e) => setSettlementDeadline(e.target.value)} /></label>
           </div>
           <p className="muted small">Required order: funding deadline ≤ lease end &lt; claim deadline &lt; settlement deadline.</p>
+          {fundingDeadline &&
+            fundingDeadlineWarning(toUnix(fundingDeadline), Math.floor(Date.now() / 1000)) && (
+              <div className="notice warn">
+                {fundingDeadlineWarning(toUnix(fundingDeadline), Math.floor(Date.now() / 1000))}
+              </div>
+            )}
         </div>
       )}
 

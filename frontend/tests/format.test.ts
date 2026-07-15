@@ -36,3 +36,18 @@ describe('weiToMon', () => {
     }
   })
 })
+
+import { fundingDeadlineWarning } from '../src/lib/format'
+
+describe('fundingDeadlineWarning', () => {
+  const now = 1_700_000_000
+  test('warns when the deadline is in the past', () => {
+    expect(fundingDeadlineWarning(now - 3600, now)).toMatch(/in the past/)
+  })
+  test('warns when less than 24 hours away', () => {
+    expect(fundingDeadlineWarning(now + 3600 * 5, now)).toMatch(/less than 24 hours/)
+  })
+  test('no warning when comfortably in the future (>= 24h)', () => {
+    expect(fundingDeadlineWarning(now + 3600 * 48, now)).toBeNull()
+  })
+})
