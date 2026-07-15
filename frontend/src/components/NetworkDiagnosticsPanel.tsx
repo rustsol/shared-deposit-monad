@@ -1,12 +1,15 @@
-// Visible dual-provider network health panel. Read-only: Recheck performs only
-// reads; Switch/Add use wallet_switchEthereumChain / wallet_addEthereumChain.
-// Shows no secrets.
+// Visible dual-provider network diagnostics, split into three independent
+// sections: IDENTITY (who is connected vs signed in), NETWORK (can the chain be
+// transacted on at all), and OPTIONAL DIAGNOSTICS (best-effort injected-provider
+// reads that never block). Reads only: Recheck performs reads; Switch/Add use
+// wallet_switchEthereumChain / wallet_addEthereumChain. Shows no secrets.
 
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import type { EIP1193Provider } from 'viem'
 import { weiToMon, shortAddress } from '../lib/format'
 import {
+  MONAD_RPC,
   monadAddChainParams,
   monadSwitchChainParams,
   type NetworkDiagnostics,
@@ -14,6 +17,12 @@ import {
 
 function yn(value: boolean | null): string {
   return value === null ? '—' : value ? 'Yes' : 'No'
+}
+
+// Only a genuine chain/contract fault is RPC evidence. A session mismatch or an
+// unavailable optional read is NOT.
+function hasRpcEvidence(data: NetworkDiagnostics): boolean {
+  return data.networkBlockingReasons.length > 0
 }
 
 export function NetworkDiagnosticsPanel({
@@ -63,58 +72,156 @@ export function NetworkDiagnosticsPanel({
     return (
       <div className="card">
         <h2>Wallet network</h2>
-        <p className="muted">{loading ? 'Checking network…' : 'Connect a wallet to check the network.'}</p>
+        <p className="muted">
+          {loading ? 'Checking network…' : 'Connect a wallet to check the network.'}
+        </p>
       </div>
     )
   }
 
-  const healthy = data.overallHealth === 'healthy'
+  const appCodeOk = Boolean(data.app.contractCode && data.app.contractCode !== '0x')
+  const nonceDisplay = (n: number | null) => (n === null ? 'Unavailable' : String(n))
+
   return (
     <div className="card">
       <h2>Wallet network</h2>
-      <p>
-        Transaction network health:{' '}
-        <span className={`badge ${healthy ? 'active' : 'reverted'}`}>
-          {healthy ? 'Healthy' : 'Unhealthy'}
-        </span>
-      </p>
+
+      {/* IDENTITY ---------------------------------------------------------- */}
+      <h3 className="small">Identity</h3>
       <table className="data small">
-        <thead>
-          <tr><th></th><th>Wallet provider</th><th>Application RPC</th></tr>
-        </thead>
         <tbody>
-          <tr><td>Chain ID</td><td>{data.wallet.chainId ?? '—'}</td><td>{data.app.chainId ?? '—'}</td></tr>
-          <tr><td>Latest block</td><td className="amount">{data.wallet.latestBlock ?? '—'}</td><td className="amount">{data.app.latestBlock ?? '—'}</td></tr>
-          <tr><td>Block difference</td><td colSpan={2} className="amount">{data.blockDifference ?? '—'}</td></tr>
-          <tr><td>Contract visible</td><td>{yn(Boolean(data.wallet.contractCode && data.wallet.contractCode !== '0x'))}</td><td>{yn(Boolean(data.app.contractCode && data.app.contractCode !== '0x'))}</td></tr>
-          <tr><td>Contract code match</td><td colSpan={2}>{yn(data.contractCodeMatches)}</td></tr>
-          <tr><td>Safe read ok</td><td>{yn(data.wallet.safeReadOk)}</td><td>{yn(data.app.safeReadOk)}</td></tr>
-          <tr><td>Balance (MON)</td><td className="amount">{data.wallet.balanceWei !== null ? weiToMon(data.wallet.balanceWei) : '—'}</td><td className="amount">{data.app.balanceWei !== null ? weiToMon(data.app.balanceWei) : '—'}</td></tr>
-          <tr><td>Latest nonce</td><td className="amount">{data.wallet.latestNonce ?? '—'}</td><td className="amount">{data.app.latestNonce ?? '—'}</td></tr>
-          <tr><td>Pending nonce</td><td className="amount">{data.wallet.pendingNonce ?? '—'}</td><td className="amount">{data.app.pendingNonce ?? '—'}</td></tr>
+          <tr>
+            <td>Connected wallet</td>
+            <td className="mono">
+              {data.connectedWallet ? shortAddress(data.connectedWallet) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>Signed-in wallet</td>
+            <td className="mono">{data.authWallet ? shortAddress(data.authWallet) : '—'}</td>
+          </tr>
+          <tr>
+            <td>Wallet client account</td>
+            <td className="mono">
+              {data.walletClientAccount ? shortAddress(data.walletClientAccount) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>Identity match</td>
+            <td>
+              <span className={`badge ${data.identityMatch ? 'active' : 'reverted'}`}>
+                {yn(data.identityMatch)}
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
-      <p className="small muted">
-        Connected wallet: <span className="mono">{data.connectedWallet ? shortAddress(data.connectedWallet) : '—'}</span>
-        {' · '}Session match: {yn(data.walletMatchesSession)}
-        {data.connectedIsRecipient !== null && <> · Is recipient: {yn(data.connectedIsRecipient)}</>}
-      </p>
-
-      {!healthy && (
-        <div className="notice error">
-          <strong>This wallet cannot safely transact yet:</strong>
-          <ul>
-            {data.failures.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
+      {!data.identityMatch && (
+        <div className="notice warn">
+          {data.identityReasons.map((r) => (
+            <div key={r}>{r}</div>
+          ))}
           <p className="small">
-            If switching does not fix it, your wallet's saved Monad Testnet network entry is
-            using a broken RPC. Remove the custom Monad Testnet network from your wallet and
-            add it again with RPC <span className="mono">https://testnet-rpc.monad.xyz</span>.
+            This is an account change, not a network problem. Sign in with the connected wallet to
+            continue.
           </p>
         </div>
       )}
+
+      {/* NETWORK ----------------------------------------------------------- */}
+      <h3 className="small">Network</h3>
+      <table className="data small">
+        <tbody>
+          <tr>
+            <td>Wallet chain ID</td>
+            <td>{data.wallet.chainId ?? '—'}</td>
+          </tr>
+          <tr>
+            <td>Application chain ID</td>
+            <td>{data.app.chainId ?? '—'}</td>
+          </tr>
+          <tr>
+            <td>Contract via application RPC</td>
+            <td>{yn(appCodeOk)}</td>
+          </tr>
+          <tr>
+            <td>Latest application block</td>
+            <td className="amount">{data.app.latestBlock ?? '—'}</td>
+          </tr>
+          <tr>
+            <td>Network ready</td>
+            <td>
+              <span className={`badge ${data.networkReady ? 'active' : 'reverted'}`}>
+                {yn(data.networkReady)}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {!data.networkReady && (
+        <div className="notice error">
+          <strong>The network is not ready to transact:</strong>
+          <ul>
+            {data.networkBlockingReasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+          {hasRpcEvidence(data) && (
+            <p className="small">
+              If switching networks does not fix this, your wallet's saved Monad Testnet entry may
+              be using a broken RPC. Re-add it with RPC{' '}
+              <span className="mono">{MONAD_RPC}</span>.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* OPTIONAL DIAGNOSTICS --------------------------------------------- */}
+      <h3 className="small">Optional diagnostics</h3>
+      <p className="small muted">
+        These are best-effort reads. An unavailable value here does not block transacting — the
+        wallet manages its own nonce and the application RPC is authoritative.
+      </p>
+      <table className="data small">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Wallet provider</th>
+            <th>Application RPC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Latest block</td>
+            <td className="amount">{data.wallet.latestBlock ?? '—'}</td>
+            <td className="amount">{data.app.latestBlock ?? '—'}</td>
+          </tr>
+          <tr>
+            <td>Nonce (latest)</td>
+            <td>{nonceDisplay(data.wallet.latestNonce)}</td>
+            <td>{nonceDisplay(data.app.latestNonce)}</td>
+          </tr>
+          <tr>
+            <td>Nonce (pending)</td>
+            <td>{nonceDisplay(data.wallet.pendingNonce)}</td>
+            <td>{nonceDisplay(data.app.pendingNonce)}</td>
+          </tr>
+          <tr>
+            <td>Balance (MON)</td>
+            <td className="amount">
+              {data.wallet.balanceWei !== null ? weiToMon(data.wallet.balanceWei) : 'Unavailable'}
+            </td>
+            <td className="amount">
+              {data.app.balanceWei !== null ? weiToMon(data.app.balanceWei) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>Contract visible</td>
+            <td>{yn(Boolean(data.wallet.contractCode && data.wallet.contractCode !== '0x'))}</td>
+            <td>{yn(appCodeOk)}</td>
+          </tr>
+        </tbody>
+      </table>
 
       <p>
         <button className="secondary" disabled={loading || busy} onClick={() => void recheck()}>

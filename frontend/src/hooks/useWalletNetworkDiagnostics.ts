@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount, useChainId } from 'wagmi'
-import { getPublicClient } from 'wagmi/actions'
+import { getConnectorClient, getPublicClient } from 'wagmi/actions'
 import type { EIP1193Provider } from 'viem'
 import { wagmiConfig } from '../lib/chain'
 import { useAuth } from '../app/AuthContext'
@@ -22,6 +22,11 @@ const hexToNumber = (hex: unknown): number | null =>
 const hexToBig = (hex: unknown): string | null =>
   typeof hex === 'string' ? BigInt(hex).toString() : null
 
+// Each injected read is independent and best-effort: a wallet that does not
+// support (or transiently fails) one optional method — commonly
+// eth_getTransactionCount — must not blank out the chain ID, block, or contract
+// code that DO succeed. Optional reads staying null is a soft diagnostic, not a
+// blocking fault.
 async function readInjected(
   provider: EIP1193Provider,
   wallet: `0x${string}`,
@@ -29,6 +34,13 @@ async function readInjected(
 ): Promise<ProviderReadings> {
   const req = (method: string, params: unknown[] = []) =>
     provider.request({ method, params } as never)
+  const tryReq = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await fn()
+    } catch {
+      return null
+    }
+  }
   const readings: ProviderReadings = {
     chainId: null,
     latestBlock: null,
@@ -39,26 +51,36 @@ async function readInjected(
     contractCodeHash: null,
     safeReadOk: false,
   }
-  try {
-    readings.chainId = hexToNumber(await req('eth_chainId'))
-    readings.latestBlock = hexToNumber(await req('eth_blockNumber'))
-    readings.balanceWei = hexToBig(await req('eth_getBalance', [wallet, 'latest']))
-    readings.latestNonce = hexToNumber(await req('eth_getTransactionCount', [wallet, 'latest']))
-    readings.pendingNonce = hexToNumber(
-      await req('eth_getTransactionCount', [wallet, 'pending']),
-    )
-    const code = (await req('eth_getCode', [contract, 'latest'])) as string
+  readings.chainId = hexToNumber(await tryReq(() => req('eth_chainId')))
+  readings.latestBlock = hexToNumber(await tryReq(() => req('eth_blockNumber')))
+  readings.balanceWei = hexToBig(await tryReq(() => req('eth_getBalance', [wallet, 'latest'])))
+  readings.latestNonce = hexToNumber(
+    await tryReq(() => req('eth_getTransactionCount', [wallet, 'latest'])),
+  )
+  readings.pendingNonce = hexToNumber(
+    await tryReq(() => req('eth_getTransactionCount', [wallet, 'pending'])),
+  )
+  const code = (await tryReq(() => req('eth_getCode', [contract, 'latest']))) as string | null
+  if (typeof code === 'string') {
     readings.contractCode = code
     readings.contractCodeHash = codeHash(code)
-    const result = (await req('eth_call', [
-      { from: wallet, to: contract, data: safeReadCalldata() },
-      'latest',
-    ])) as string
-    readings.safeReadOk = typeof result === 'string' && result !== '0x'
-  } catch (error) {
-    readings.error = error instanceof Error ? error.message.split('\n')[0] : String(error)
   }
+  const result = (await tryReq(() =>
+    req('eth_call', [{ from: wallet, to: contract, data: safeReadCalldata() }, 'latest']),
+  )) as string | null
+  readings.safeReadOk = typeof result === 'string' && result !== '0x'
   return readings
+}
+
+// The active wallet client's own account, for the identity check. Unknown
+// (connector doesn't expose it) is treated as "no disagreement", not a fault.
+async function readWalletClientAccount(): Promise<string | null> {
+  try {
+    const client = await getConnectorClient(wagmiConfig)
+    return client.account?.address ?? null
+  } catch {
+    return null
+  }
 }
 
 async function readPublic(
@@ -119,7 +141,7 @@ export function useWalletNetworkDiagnostics(params: {
     setLoading(true)
     try {
       const provider = (await connector?.getProvider()) as EIP1193Provider | undefined
-      const [wallet, app] = await Promise.all([
+      const [wallet, app, walletClientAccount] = await Promise.all([
         provider
           ? readInjected(provider, address, params.contractAddress)
           : Promise.resolve<ProviderReadings>({
@@ -134,11 +156,13 @@ export function useWalletNetworkDiagnostics(params: {
               error: 'no injected wallet provider',
             }),
         readPublic(address, params.contractAddress),
+        readWalletClientAccount(),
       ])
       setData(
         evaluateHealth(wallet, app, {
           connectedWallet: address,
           authWallet,
+          walletClientAccount,
           requiredRecipient: params.requiredRecipient,
           minBalanceWei: params.minBalanceWei,
         }),

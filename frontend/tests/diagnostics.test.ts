@@ -1,9 +1,12 @@
 // Dual-provider Monad Testnet health + broadcast-propagation logic. These are
 // pure evaluators — no wallet, no RPC — so every branch is exercised directly.
+//
+// Network readiness and identity are INDEPENDENT. Optional injected-provider
+// reads (nonce, wallet balance, wallet-side block/code) must never block a
+// write, and a session mismatch is an account concern, not a network fault.
 
 import { describe, expect, test } from 'vitest'
 import {
-  BLOCK_TOLERANCE,
   MONAD_CHAIN_HEX,
   MONAD_CHAIN_ID,
   MONAD_RPC,
@@ -15,10 +18,10 @@ import {
 } from '../src/lib/diagnostics'
 
 const WALLET = '0x2e35125f000000000000000000000000000077df'
+const OTHER = '0x' + 'a'.repeat(40)
 const CONTRACT_CODE = '0x60016002'
 const CODE_HASH = 'code-hash-a'
 
-// A fully-healthy reading for one provider; override per test.
 function healthyReading(overrides: Partial<ProviderReadings> = {}): ProviderReadings {
   return {
     chainId: MONAD_CHAIN_ID,
@@ -35,121 +38,167 @@ function healthyReading(overrides: Partial<ProviderReadings> = {}): ProviderRead
 
 const baseOpts = { connectedWallet: WALLET, authWallet: WALLET }
 
-describe('evaluateHealth — both providers must be genuinely on Monad Testnet', () => {
-  test('healthy when both providers agree on chain, block, code, and reads', () => {
+describe('evaluateHealth — network readiness requires only genuinely necessary facts', () => {
+  test('ready when both chains are 10143, the app RPC has a block, and the contract is visible', () => {
     const d = evaluateHealth(healthyReading(), healthyReading(), baseOpts)
+    expect(d.networkReady).toBe(true)
     expect(d.overallHealth).toBe('healthy')
-    expect(d.failures).toHaveLength(0)
+    expect(d.networkBlockingReasons).toHaveLength(0)
   })
 
-  test('unhealthy when the WALLET provider reports the wrong chain even if the app RPC is correct', () => {
+  test('wrong WALLET chain blocks the network even if the app RPC is correct', () => {
+    const d = evaluateHealth(healthyReading({ chainId: 31337 }), healthyReading(), baseOpts)
+    expect(d.networkReady).toBe(false)
+    expect(d.networkBlockingReasons.some((r) => /Wallet chain ID is 31337/.test(r))).toBe(true)
+  })
+
+  test('wrong APPLICATION chain blocks the network', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading({ chainId: 143 }), baseOpts)
+    expect(d.networkReady).toBe(false)
+    expect(d.networkBlockingReasons.some((r) => /Application RPC chain ID is 143/.test(r))).toBe(true)
+  })
+
+  test('missing contract code through the application RPC blocks the network', () => {
     const d = evaluateHealth(
-      healthyReading({ chainId: 31337 }),
       healthyReading(),
-      baseOpts,
-    )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /Wallet provider chain ID is 31337/.test(f))).toBe(true)
-  })
-
-  test('unhealthy when the wallet provider block is stale beyond tolerance', () => {
-    const d = evaluateHealth(
-      healthyReading({ latestBlock: 1000 - (BLOCK_TOLERANCE + 5) }),
-      healthyReading({ latestBlock: 1000 }),
-      baseOpts,
-    )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /stale/.test(f))).toBe(true)
-  })
-
-  test('a stale-but-within-tolerance block stays healthy', () => {
-    const d = evaluateHealth(
-      healthyReading({ latestBlock: 1000 - (BLOCK_TOLERANCE - 1) }),
-      healthyReading({ latestBlock: 1000 }),
-      baseOpts,
-    )
-    expect(d.overallHealth).toBe('healthy')
-  })
-
-  test('unhealthy when contract code is invisible through the wallet provider', () => {
-    const d = evaluateHealth(
       healthyReading({ contractCode: '0x', contractCodeHash: null }),
+      baseOpts,
+    )
+    expect(d.networkReady).toBe(false)
+    expect(d.networkBlockingReasons.some((r) => /not visible through the application RPC/.test(r))).toBe(true)
+  })
+
+  test('application RPC returning no block blocks the network', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading({ latestBlock: null }), baseOpts)
+    expect(d.networkReady).toBe(false)
+    expect(d.networkBlockingReasons.some((r) => /did not return a latest block/.test(r))).toBe(true)
+  })
+})
+
+describe('evaluateHealth — optional injected-provider reads NEVER block', () => {
+  test('wallet-provider nonce unavailable does not block a valid write', () => {
+    const d = evaluateHealth(
+      healthyReading({ latestNonce: null, pendingNonce: null }),
       healthyReading(),
       baseOpts,
     )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /Contract code not visible through the wallet/.test(f))).toBe(true)
+    expect(d.networkReady).toBe(true)
+    expect(d.networkBlockingReasons).toHaveLength(0)
   })
 
-  test('unhealthy when the two providers see different contract code', () => {
-    const d = evaluateHealth(
-      healthyReading({ contractCodeHash: 'code-hash-b' }),
-      healthyReading({ contractCodeHash: 'code-hash-a' }),
-      baseOpts,
-    )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /differs between/.test(f))).toBe(true)
-  })
-
-  test('unhealthy when the safe contract read fails through the wallet provider', () => {
-    const d = evaluateHealth(
-      healthyReading({ safeReadOk: false }),
-      healthyReading(),
-      baseOpts,
-    )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /Safe contract read failed through the wallet/.test(f))).toBe(true)
-  })
-
-  test('unhealthy when the connected wallet does not match the signed-in session', () => {
-    const d = evaluateHealth(healthyReading(), healthyReading(), {
-      connectedWallet: WALLET,
-      authWallet: '0x' + 'a'.repeat(40),
-    })
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.walletMatchesSession).toBe(false)
-  })
-
-  test('optional recipient gate: unhealthy when connected wallet is not the required recipient', () => {
-    const d = evaluateHealth(healthyReading(), healthyReading(), {
-      ...baseOpts,
-      requiredRecipient: '0x' + 'f'.repeat(40),
-    })
-    expect(d.connectedIsRecipient).toBe(false)
-    expect(d.overallHealth).toBe('unhealthy')
-  })
-
-  test('optional recipient gate: healthy when connected wallet IS the required recipient', () => {
-    const d = evaluateHealth(healthyReading(), healthyReading(), {
-      ...baseOpts,
-      requiredRecipient: WALLET,
-    })
-    expect(d.connectedIsRecipient).toBe(true)
-    expect(d.overallHealth).toBe('healthy')
-  })
-
-  test('MON balance alone does NOT enable a write when the wallet provider is unhealthy', () => {
-    // The wallet reports a real 5 MON balance and chain 10143, but its RPC is
-    // stale/broken so it cannot see the contract code. This is exactly the bug:
-    // funds present, but the wallet is not truly talking to Monad Testnet.
+  test('wallet-provider unable to read contract code does not mark the network unready or blame RPC', () => {
     const d = evaluateHealth(
       healthyReading({ contractCode: '0x', contractCodeHash: null, safeReadOk: false }),
       healthyReading(),
-      { ...baseOpts, minBalanceWei: 1n },
+      baseOpts,
     )
-    expect(d.wallet.balanceWei).toBe('5000000000000000000')
-    expect(d.overallHealth).toBe('unhealthy')
+    expect(d.networkReady).toBe(true)
+    expect(d.networkBlockingReasons).toHaveLength(0)
   })
 
-  test('minimum-balance gate flags an underfunded wallet on both providers', () => {
+  test('a stale wallet-provider block does not block', () => {
     const d = evaluateHealth(
-      healthyReading({ balanceWei: '10' }),
+      healthyReading({ latestBlock: 1 }),
+      healthyReading({ latestBlock: 999_999 }),
+      baseOpts,
+    )
+    expect(d.networkReady).toBe(true)
+    expect(d.blockDifference).toBe(999_998)
+  })
+
+  test('a wallet-provider balance read failure does not block when the app RPC has the balance', () => {
+    const d = evaluateHealth(
+      healthyReading({ balanceWei: null }),
+      healthyReading({ balanceWei: '5000000000000000000' }),
+      { ...baseOpts, minBalanceWei: 1n },
+    )
+    expect(d.networkReady).toBe(true)
+  })
+
+  test('gas gate uses the APPLICATION RPC balance and blocks only when it is too low', () => {
+    const d = evaluateHealth(
+      healthyReading({ balanceWei: '5000000000000000000' }),
       healthyReading({ balanceWei: '10' }),
       { ...baseOpts, minBalanceWei: 1000n },
     )
-    expect(d.overallHealth).toBe('unhealthy')
-    expect(d.failures.some((f) => /Wallet-provider balance is insufficient/.test(f))).toBe(true)
-    expect(d.failures.some((f) => /Application-RPC balance is insufficient/.test(f))).toBe(true)
+    expect(d.networkReady).toBe(false)
+    expect(d.networkBlockingReasons.some((r) => /below the estimated gas/.test(r))).toBe(true)
+  })
+})
+
+describe('evaluateHealth — identity is separate from the network', () => {
+  test('session mismatch does NOT make the network unready and is not an RPC failure', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading(), {
+      connectedWallet: WALLET,
+      authWallet: OTHER,
+    })
+    expect(d.networkReady).toBe(true) // network is fine
+    expect(d.identityMatch).toBe(false)
+    expect(d.walletMatchesSession).toBe(false)
+    expect(d.identityReasons.some((r) => /does not match the signed-in session/.test(r))).toBe(true)
+    // The mismatch must NOT appear as a network blocking reason.
+    expect(d.networkBlockingReasons.join(' ')).not.toMatch(/session/i)
+  })
+
+  test('a wallet-client account that disagrees with the connected wallet fails identity', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading(), {
+      connectedWallet: WALLET,
+      authWallet: WALLET,
+      walletClientAccount: OTHER,
+    })
+    expect(d.identityMatch).toBe(false)
+    expect(d.walletClientMatches).toBe(false)
+    expect(d.networkReady).toBe(true)
+  })
+
+  test('an unknown wallet-client account is not treated as a mismatch', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading(), {
+      connectedWallet: WALLET,
+      authWallet: WALLET,
+      walletClientAccount: null,
+    })
+    expect(d.walletClientMatches).toBe(true)
+    expect(d.identityMatch).toBe(true)
+  })
+
+  test('matching connected + session + wallet client is a full identity match', () => {
+    const d = evaluateHealth(healthyReading(), healthyReading(), {
+      connectedWallet: WALLET,
+      authWallet: WALLET,
+      walletClientAccount: WALLET.toUpperCase(),
+    })
+    expect(d.identityMatch).toBe(true)
+  })
+
+  test('recipient info is exposed without blocking the network', () => {
+    const notRecipient = evaluateHealth(healthyReading(), healthyReading(), {
+      ...baseOpts,
+      requiredRecipient: OTHER,
+    })
+    expect(notRecipient.connectedIsRecipient).toBe(false)
+    expect(notRecipient.networkReady).toBe(true)
+
+    const isRecipient = evaluateHealth(healthyReading(), healthyReading(), {
+      ...baseOpts,
+      requiredRecipient: WALLET,
+    })
+    expect(isRecipient.connectedIsRecipient).toBe(true)
+  })
+})
+
+describe('the exact reported bug: recipient connected, tenant session, provider nonce fails', () => {
+  test('network is ready; the only blocker is identity, not RPC and not nonce', () => {
+    // Session was signed in as a tenant; the recipient wallet is now connected;
+    // the injected provider cannot return eth_getTransactionCount.
+    const d = evaluateHealth(
+      healthyReading({ latestNonce: null, pendingNonce: null }),
+      healthyReading(),
+      { connectedWallet: WALLET, authWallet: OTHER },
+    )
+    expect(d.networkReady).toBe(true) // do NOT blame the RPC
+    expect(d.networkBlockingReasons).toHaveLength(0) // nonce is not a blocker
+    expect(d.identityMatch).toBe(false) // the real problem
+    expect(d.identityReasons).toContain('Connected wallet does not match the signed-in session')
   })
 })
 
