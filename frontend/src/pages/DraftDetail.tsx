@@ -134,7 +134,9 @@ export default function DraftDetail() {
         args.tenantAddresses,
         args.requiredAmounts.map((amount) => BigInt(amount)),
       ],
-      afterReceipt: async (txHash) => {
+      verify: async (txHash) => {
+        // The backend independently verifies the real receipt + AgreementCreated
+        // event before we treat creation as done. VERIFIED requires it to succeed.
         const confirmed = await api<{ agreementId: string; contractAddress: string; chainId: number }>(
           `/agreement-drafts/${draftId}/confirm-onchain`,
           { method: 'POST', body: { tx_hash: txHash } },
@@ -143,6 +145,7 @@ export default function DraftDetail() {
         navigate(
           `/agreements/${confirmed.chainId}/${confirmed.contractAddress}/${confirmed.agreementId}`,
         )
+        return true
       },
     })
     if (hash === null) setCreationError('The transaction did not complete — see the drawer for details.')

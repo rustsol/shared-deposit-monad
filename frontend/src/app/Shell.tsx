@@ -6,6 +6,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from 'wagmi'
 import { monadTestnet, EXPLORER_TX } from '../lib/chain'
 import { shortAddress } from '../lib/format'
+import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from './AuthContext'
 import { describeTxStatus, useTx } from './TxContext'
 
@@ -60,13 +61,27 @@ function AuthStatus() {
   return <Link to="/login">Sign in</Link>
 }
 
+const STATUS_CLASS: Record<string, string> = {
+  VERIFIED: 'verified',
+  MINED_REVERTED: 'reverted',
+  MINED_SUCCESS: 'pending',
+  BROADCAST: 'broadcast',
+  PENDING_ONCHAIN: 'pending',
+  REFRESHING_CONTRACT_STATE: 'pending',
+  WAITING_FOR_WALLET: 'waiting-for-wallet',
+  TIMEOUT_OR_RPC_ERROR: 'reverted',
+  USER_REJECTED: 'reverted',
+  PREPARING: 'pending',
+}
+
 function TxDrawer() {
-  const { transactions, clear } = useTx()
+  const { transactions, remove, clear } = useTx()
+  const { retryReceipt } = useContractTx()
   if (transactions.length === 0) return null
   return (
     <aside className="tx-drawer" aria-live="polite" aria-label="Transaction status">
       {transactions.slice(0, 4).map((entry) => (
-        <div key={entry.id} className={`tx-entry ${entry.status}`}>
+        <div key={entry.id} className={`tx-entry ${STATUS_CLASS[entry.status] ?? ''}`}>
           <strong>{entry.label}</strong>
           <div className="small muted">
             {entry.functionName} · {describeTxStatus(entry.status)}
@@ -77,10 +92,26 @@ function TxDrawer() {
             </a>
           )}
           {entry.error && <div className="small field-error">{entry.error}</div>}
+          {entry.status === 'TIMEOUT_OR_RPC_ERROR' && entry.hash && (
+            <button
+              className="secondary small"
+              onClick={() => void retryReceipt(entry.id, entry.hash as `0x${string}`)}
+            >
+              Retry status
+            </button>
+          )}
+          {(entry.status === 'VERIFIED' ||
+            entry.status === 'MINED_REVERTED' ||
+            entry.status === 'USER_REJECTED' ||
+            entry.status === 'TIMEOUT_OR_RPC_ERROR') && (
+            <button className="secondary small" onClick={() => remove(entry.id)}>
+              Dismiss
+            </button>
+          )}
         </div>
       ))}
       <button className="secondary small" onClick={clear}>
-        Dismiss
+        Clear all
       </button>
     </aside>
   )

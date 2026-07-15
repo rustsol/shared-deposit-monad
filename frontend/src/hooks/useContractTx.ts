@@ -1,36 +1,28 @@
-// One shared path for every real contract write: wallet request → broadcast
-// → receipt → optional backend verification. Success is never shown from a
-// hash alone; a receipt (status success) is always awaited, and reverts are
-// surfaced with the decoded error when the wallet/RPC provides one.
+// One shared path for every real contract write, driving the conceptual
+// transaction-state model. A returned hash is only BROADCAST; a receipt makes
+// it MINED_SUCCESS/MINED_REVERTED; VERIFIED requires the caller's direct
+// contract-state check to pass. Receipts are polled directly (viem's block
+// watcher stalls against Monad's load-balanced RPC), with a bounded timeout
+// that surfaces TIMEOUT_OR_RPC_ERROR + Retry instead of hanging forever or
+// falsely reporting failure.
 
 import { useCallback } from 'react'
-import { useWriteContract } from 'wagmi'
+import { useChainId, useWriteContract } from 'wagmi'
 import { getPublicClient } from 'wagmi/actions'
 import type { TransactionReceipt } from 'viem'
-import { wagmiConfig } from '../lib/chain'
+import { monadTestnet, wagmiConfig } from '../lib/chain'
 import { useTx } from '../app/TxContext'
 
-// Direct receipt polling. viem's waitForTransactionReceipt relies on a block
-// watcher that stalls against Monad's load-balanced public RPC (the receipt is
-// visible on one backend node while the watcher polls another). Polling
-// getTransactionReceipt directly and tolerating "not found" is reliable there.
-async function pollForReceipt(
-  hash: `0x${string}`,
-  { intervalMs = 1500, timeoutMs = 120_000 }: { intervalMs?: number; timeoutMs?: number } = {},
-): Promise<TransactionReceipt> {
+async function fetchReceiptOnce(hash: `0x${string}`): Promise<TransactionReceipt | null> {
   const client = getPublicClient(wagmiConfig)
   if (!client) throw new Error('no RPC client available')
-  const deadline = Date.now() + timeoutMs
-  for (;;) {
-    try {
-      return await client.getTransactionReceipt({ hash })
-    } catch {
-      // Receipt not found yet (or a stale load-balanced node) — keep waiting.
-      if (Date.now() > deadline) {
-        throw new Error('timed out waiting for the receipt — the transaction may still confirm; check the explorer')
-      }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
-    }
+  if (client.chain?.id !== monadTestnet.id) {
+    throw new Error(`RPC client is on the wrong chain (${client.chain?.id})`)
+  }
+  try {
+    return await client.getTransactionReceipt({ hash })
+  } catch {
+    return null // not found yet, or a stale load-balanced node
   }
 }
 
@@ -41,12 +33,16 @@ export interface ContractTxRequest {
   abi: readonly unknown[]
   args: readonly unknown[]
   value?: bigint
-  /** Runs after a successful receipt (e.g. backend verification). */
-  afterReceipt?: (hash: `0x${string}`) => Promise<void>
+  /** Direct contract-state check; VERIFIED requires it to resolve true. */
+  verify?: (hash: `0x${string}`) => Promise<boolean>
 }
+
+const POLL_INTERVAL_MS = 1500
+const POLL_TIMEOUT_MS = 90_000
 
 export function useContractTx() {
   const { writeContractAsync } = useWriteContract()
+  const chainId = useChainId()
   const { track, update } = useTx()
 
   const send = useCallback(
@@ -54,8 +50,12 @@ export function useContractTx() {
       const id = track({
         label: request.label,
         functionName: request.functionName,
-        status: 'waiting-for-wallet',
+        status: 'WAITING_FOR_WALLET',
+        chainId,
+        contractAddress: request.address,
+        submittedAt: Date.now(),
       })
+
       let hash: `0x${string}`
       try {
         hash = await writeContractAsync({
@@ -68,44 +68,96 @@ export function useContractTx() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/reject|denied/i.test(message)) {
-          update(id, { status: 'user-rejected' })
+          update(id, { status: 'USER_REJECTED' })
         } else {
-          update(id, { status: 'error', error: message.split('\n')[0] })
+          // No hash was produced: never show Broadcast/Pending/Mined.
+          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', error: message.split('\n')[0] })
         }
         return null
       }
 
-      update(id, { status: 'broadcast', hash })
-      let receipt
-      try {
-        update(id, { status: 'pending', hash })
-        receipt = await pollForReceipt(hash)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        update(id, { status: 'error', hash, error: message.split('\n')[0] })
-        return null
-      }
-      if (receipt.status !== 'success') {
-        update(id, { status: 'reverted', hash, error: 'transaction reverted onchain' })
-        return null
-      }
-      update(id, { status: 'mined', hash })
+      update(id, { status: 'BROADCAST', hash })
 
-      if (request.afterReceipt) {
-        update(id, { status: 'backend-verification', hash })
+      // Poll for the receipt directly with a bounded timeout.
+      update(id, { status: 'PENDING_ONCHAIN', hash })
+      const deadline = Date.now() + POLL_TIMEOUT_MS
+      let receipt: TransactionReceipt | null = null
+      for (;;) {
         try {
-          await request.afterReceipt(hash)
+          receipt = await fetchReceiptOnce(hash)
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          update(id, { status: 'error', hash, error: `backend verification failed: ${message}` })
+          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', hash, error: message })
+          return null
+        }
+        if (receipt) break
+        if (Date.now() > deadline) {
+          // Preserve the hash; this is NOT a failure — it may still confirm.
+          update(id, {
+            status: 'TIMEOUT_OR_RPC_ERROR',
+            hash,
+            error: 'still pending — check the explorer or retry status',
+          })
+          return null
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+
+      if (receipt.status !== 'success') {
+        update(id, { status: 'MINED_REVERTED', hash, error: 'transaction reverted onchain' })
+        return null
+      }
+      update(id, { status: 'MINED_SUCCESS', hash })
+
+      if (request.verify) {
+        update(id, { status: 'REFRESHING_CONTRACT_STATE', hash })
+        try {
+          const ok = await request.verify(hash)
+          if (!ok) {
+            // Receipt success but the expected state change is not visible:
+            // do NOT claim VERIFIED — surface it as a real problem.
+            update(id, {
+              status: 'TIMEOUT_OR_RPC_ERROR',
+              hash,
+              error: 'mined, but the expected contract state change was not observed',
+            })
+            return null
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', hash, error: message })
           return null
         }
       }
-      update(id, { status: 'verified', hash })
+      update(id, { status: 'VERIFIED', hash })
       return hash
     },
-    [track, update, writeContractAsync],
+    [chainId, track, update, writeContractAsync],
   )
 
-  return { send }
+  /** Retry receipt verification for a recovered/timed-out transaction. */
+  const retryReceipt = useCallback(
+    async (id: string, hash: `0x${string}`): Promise<void> => {
+      update(id, { status: 'PENDING_ONCHAIN', hash })
+      const deadline = Date.now() + POLL_TIMEOUT_MS
+      for (;;) {
+        const receipt = await fetchReceiptOnce(hash).catch(() => null)
+        if (receipt) {
+          update(id, {
+            status: receipt.status === 'success' ? 'VERIFIED' : 'MINED_REVERTED',
+            hash,
+          })
+          return
+        }
+        if (Date.now() > deadline) {
+          update(id, { status: 'TIMEOUT_OR_RPC_ERROR', hash, error: 'still pending' })
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+    },
+    [update],
+  )
+
+  return { send, retryReceipt }
 }
