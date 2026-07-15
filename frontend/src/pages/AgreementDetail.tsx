@@ -1,18 +1,31 @@
-// Live agreement page. ALL financial state comes from direct contract reads
-// (wagmi/viem against Monad Testnet); the backend supplies only the private
-// alias and terms metadata. Acceptance, funding, and pre-activation
-// withdrawal are real wallet transactions with receipt-verified status.
+// Live agreement page. ALL financial and role state comes from DIRECT contract
+// reads (wagmi/viem against Monad Testnet). The backend supplies only the
+// private alias and terms metadata — never acceptance or funding state, and
+// never role. Role and permitted actions come from the shared resolver.
 
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useReadContract, useReadContracts } from 'wagmi'
+import { readContract } from 'wagmi/actions'
 import { api } from '../lib/api'
-import { EXPLORER_ADDRESS, EXPLORER_TX, monadTestnet } from '../lib/chain'
-import { formatTimestamp, monToWei, shortAddress, weiToMon } from '../lib/format'
+import { EXPLORER_ADDRESS, EXPLORER_TX, monadTestnet, wagmiConfig } from '../lib/chain'
+import { formatTimestamp, shortAddress, weiToMon } from '../lib/format'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 import { useAuth } from '../app/AuthContext'
-import { useContractTx } from '../hooks/useContractTx'
+import {
+  ReadOnlyParticipantCard,
+  RecipientAcceptanceCard,
+  TenantAcceptanceCard,
+  TenantFundingCard,
+  TenantWithdrawCard,
+  WalletMismatchNotice,
+} from '../components/AgreementActions'
+import {
+  resolveAgreementRole,
+  type AgreementSnapshot,
+  type TenantSnapshot,
+} from '../hooks/useAgreementRole'
 
 const STATUS_NAMES = ['NONE', 'FUNDING', 'ACTIVE', 'FINALIZED', 'CANCELLED'] as const
 const TABS = ['Overview', 'Participants & funding', 'Activity', 'Terms & proof'] as const
@@ -25,17 +38,37 @@ interface Metadata {
   recipient: string | null
 }
 
+type RawAgreement = {
+  creator: `0x${string}`
+  recipient: `0x${string}`
+  termsHash: `0x${string}`
+  leaseStart: bigint
+  leaseEnd: bigint
+  fundingDeadline: bigint
+  claimDeadline: bigint
+  settlementDeadline: bigint
+  tenantCount: number
+  requiredApprovals: number
+  totalRequired: bigint
+  totalFunded: bigint
+  recipientAccepted: boolean
+  status: number
+}
+
+type RawTenant = {
+  requiredAmount: bigint
+  fundedAmount: bigint
+  accepted: boolean
+  exists: boolean
+}
+
 export default function AgreementDetail() {
   const params = useParams<{ chainId: string; contractAddress: string; agreementId: string }>()
   const contractAddress = params.contractAddress as `0x${string}`
   const agreementId = BigInt(params.agreementId ?? '0')
   const { address } = useAccount()
-  const { status: authStatus } = useAuth()
-  const { send } = useContractTx()
+  const { status: authStatus, wallet: authWallet } = useAuth()
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview')
-  const [fundInput, setFundInput] = useState('')
-  const [withdrawInput, setWithdrawInput] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
 
   const contract = { address: contractAddress, abi: sharedDepositEscrowAbi } as const
 
@@ -70,42 +103,43 @@ export default function AgreementDetail() {
     retry: false,
   })
 
-  const agreement = agreementRead.data as
-    | {
-        creator: `0x${string}`
-        recipient: `0x${string}`
-        termsHash: `0x${string}`
-        leaseStart: bigint
-        leaseEnd: bigint
-        fundingDeadline: bigint
-        claimDeadline: bigint
-        settlementDeadline: bigint
-        tenantCount: number
-        requiredApprovals: number
-        totalRequired: bigint
-        totalFunded: bigint
-        recipientAccepted: boolean
-        status: number
-      }
-    | undefined
+  const agreement = agreementRead.data as RawAgreement | undefined
 
   const tenantRecords = useMemo(() => {
     const results = tenantRecordsRead.data ?? []
-    return tenantList.map((wallet, index) => {
-      const record = results[index]?.result as
-        | {
-            requiredAmount: bigint
-            fundedAmount: bigint
-            accepted: boolean
-            exists: boolean
-          }
-        | undefined
-      return { wallet, record }
-    })
+    return tenantList.map((wallet, index) => ({
+      wallet,
+      record: results[index]?.result as RawTenant | undefined,
+    }))
   }, [tenantList, tenantRecordsRead.data])
 
+  const role = useMemo(() => {
+    if (!agreement) return null
+    const snapshot: AgreementSnapshot = {
+      creator: agreement.creator,
+      recipient: agreement.recipient,
+      recipientAccepted: agreement.recipientAccepted,
+      status: agreement.status,
+      fundingDeadline: agreement.fundingDeadline,
+    }
+    const tenants: TenantSnapshot[] = tenantRecords.map(({ wallet, record }) => ({
+      wallet,
+      requiredAmount: record?.requiredAmount ?? 0n,
+      fundedAmount: record?.fundedAmount ?? 0n,
+      accepted: record?.accepted ?? false,
+      exists: record?.exists ?? false,
+    }))
+    return resolveAgreementRole({
+      connectedAddress: address,
+      authWallet,
+      nowSeconds: Math.floor(Date.now() / 1000),
+      agreement: snapshot,
+      tenants,
+    })
+  }, [agreement, tenantRecords, address, authWallet])
+
   if (agreementRead.isLoading) return <main className="page">Reading contract state…</main>
-  if (agreementRead.isError || !agreement) {
+  if (agreementRead.isError || !agreement || !role) {
     return (
       <main className="page">
         <div className="notice error">
@@ -117,85 +151,54 @@ export default function AgreementDetail() {
   }
 
   const statusName = STATUS_NAMES[agreement.status] ?? 'NONE'
-  const me = address?.toLowerCase()
-  const myTenant = tenantRecords.find((entry) => entry.wallet.toLowerCase() === me)
-  const isRecipient = me === agreement.recipient.toLowerCase()
-  const remaining =
-    myTenant?.record !== undefined
-      ? myTenant.record.requiredAmount - myTenant.record.fundedAmount
-      : 0n
   const acceptedCount = tenantRecords.filter((entry) => entry.record?.accepted).length
   const fundedCount = tenantRecords.filter(
     (entry) => entry.record && entry.record.fundedAmount === entry.record.requiredAmount,
   ).length
+  const me = role.connectedWallet
 
   async function refetchAll() {
     await Promise.all([agreementRead.refetch(), tenantRecordsRead.refetch()])
   }
 
-  async function acceptAsTenant() {
-    await send({
-      label: 'Accept agreement (tenant)',
-      functionName: 'acceptAsTenant',
-      ...contract,
-      args: [agreementId, agreement!.termsHash],
-      afterReceipt: refetchAll,
-    })
-  }
-
-  async function acceptAsRecipient() {
-    await send({
-      label: 'Accept agreement (recipient)',
-      functionName: 'acceptAsRecipient',
-      ...contract,
-      args: [agreementId, agreement!.termsHash],
-      afterReceipt: refetchAll,
-    })
-  }
-
-  async function deposit() {
-    setFormError(null)
-    let value: bigint
-    try {
-      value = monToWei(fundInput)
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'invalid amount')
-      return
+  // Fresh DIRECT reads for VERIFIED checks (bypass the cached query).
+  async function readAccepted(kind: 'tenant' | 'recipient'): Promise<boolean> {
+    if (kind === 'recipient') {
+      const a = (await readContract(wagmiConfig, {
+        ...contract,
+        functionName: 'getAgreement',
+        args: [agreementId],
+      })) as RawAgreement
+      return a.recipientAccepted
     }
-    if (value <= 0n) return setFormError('Enter an amount greater than zero.')
-    if (value > remaining)
-      return setFormError(`Maximum remaining contribution is ${weiToMon(remaining)} MON.`)
-    await send({
-      label: `Deposit ${fundInput} MON`,
-      functionName: 'deposit',
+    if (!me) return false
+    const t = (await readContract(wagmiConfig, {
       ...contract,
-      args: [agreementId],
-      value,
-      afterReceipt: refetchAll,
-    })
-    setFundInput('')
+      functionName: 'getTenant',
+      args: [agreementId, me as `0x${string}`],
+    })) as RawTenant
+    return t.accepted
   }
 
-  async function withdrawBeforeActivation() {
-    setFormError(null)
-    let value: bigint
-    try {
-      value = monToWei(withdrawInput)
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'invalid amount')
-      return
-    }
-    const funded = myTenant?.record?.fundedAmount ?? 0n
-    if (value <= 0n || value > funded)
-      return setFormError(`You can withdraw up to ${weiToMon(funded)} MON.`)
-    await send({
-      label: `Withdraw ${withdrawInput} MON (pre-activation)`,
-      functionName: 'withdrawFundingBeforeActivation',
+  async function readFunded(): Promise<bigint> {
+    if (!me) return 0n
+    const t = (await readContract(wagmiConfig, {
       ...contract,
-      args: [agreementId, value],
-      afterReceipt: refetchAll,
-    })
-    setWithdrawInput('')
+      functionName: 'getTenant',
+      args: [agreementId, me as `0x${string}`],
+    })) as RawTenant
+    return t.fundedAmount
+  }
+
+  const commonProps = {
+    role,
+    recipientAccepted: agreement.recipientAccepted,
+    contractAddress,
+    agreementId,
+    termsHash: agreement.termsHash,
+    refetch: refetchAll,
+    readAccepted,
+    readFunded,
   }
 
   return (
@@ -210,6 +213,14 @@ export default function AgreementDetail() {
           </a>
         </span>
       </p>
+
+      {statusName === 'FUNDING' && role.fundingDeadlinePassed && (
+        <div className="notice error">
+          The funding deadline for this agreement has passed. It can no longer be accepted
+          or funded and will not activate — it can only be cancelled, after which each
+          tenant withdraws its own contribution.
+        </div>
+      )}
 
       <div className="tabs" role="tablist">
         {TABS.map((name) => (
@@ -235,8 +246,7 @@ export default function AgreementDetail() {
             </dd>
             <dt>Tenant acceptance</dt><dd>{acceptedCount} of {agreement.tenantCount}</dd>
             <dt>Tenants fully funded</dt><dd>{fundedCount} of {agreement.tenantCount}</dd>
-            <dt>Recipient accepted</dt>
-            <dd>{agreement.recipientAccepted ? 'Yes' : 'Not yet'}</dd>
+            <dt>Recipient accepted</dt><dd>{agreement.recipientAccepted ? 'Yes' : 'Not yet'}</dd>
             <dt>Creator</dt><dd className="mono">{agreement.creator}</dd>
             <dt>Recipient</dt><dd className="mono">{agreement.recipient}</dd>
             <dt>Funding deadline</dt><dd>{formatTimestamp(agreement.fundingDeadline.toString())}</dd>
@@ -313,75 +323,43 @@ export default function AgreementDetail() {
             </table>
             <p className="small muted">
               Recipient {shortAddress(agreement.recipient)}:{' '}
-              {agreement.recipientAccepted ? 'accepted ✓' : 'not accepted yet'}
+              {agreement.recipientAccepted ? 'accepted ✓' : 'not accepted yet'} (recipients do not
+              fund the escrow)
             </p>
           </div>
 
-          {statusName === 'FUNDING' && authStatus === 'authenticated' && (
-            <div className="card">
-              <h2>Your actions</h2>
-              {!myTenant && !isRecipient && (
-                <p className="muted">The connected wallet is not a participant in this agreement.</p>
-              )}
-              {myTenant && !myTenant.record?.accepted && (
-                <p>
-                  <button className="primary" onClick={() => void acceptAsTenant()}>
-                    Accept agreement (records your acceptance onchain)
-                  </button>
-                </p>
-              )}
-              {isRecipient && !agreement.recipientAccepted && (
-                <p>
-                  <button className="primary" onClick={() => void acceptAsRecipient()}>
-                    Accept as deposit recipient
-                  </button>
-                </p>
-              )}
-              {myTenant?.record?.accepted && remaining > 0n && (
-                <>
-                  <h3>Fund your contribution</h3>
-                  <p className="muted small amount">Remaining: {weiToMon(remaining)} MON (partial deposits allowed)</p>
-                  <label className="field">
-                    <span className="name">Amount (MON)</span>
-                    <input inputMode="decimal" value={fundInput} onChange={(e) => setFundInput(e.target.value)} placeholder="0.0" />
-                  </label>
-                  <button className="primary" onClick={() => void deposit()}>
-                    Deposit
-                  </button>
-                </>
-              )}
-              {myTenant?.record?.accepted && remaining === 0n && (
-                <div className="notice success">Your contribution is fully funded.</div>
-              )}
-              {myTenant?.record && myTenant.record.fundedAmount > 0n && (
-                <>
-                  <h3>Withdraw before activation</h3>
-                  <p className="muted small">
-                    Withdrawing keeps the agreement from activating until the amount is
-                    deposited again.
-                  </p>
-                  <label className="field">
-                    <span className="name">Amount (MON)</span>
-                    <input inputMode="decimal" value={withdrawInput} onChange={(e) => setWithdrawInput(e.target.value)} placeholder="0.0" />
-                  </label>
-                  <button className="secondary" onClick={() => void withdrawBeforeActivation()}>
-                    Withdraw
-                  </button>
-                </>
-              )}
-              {formError && <div className="notice error">{formError}</div>}
+          {authStatus !== 'authenticated' ? (
+            <div className="notice">
+              <Link to="/login">Sign in</Link> with a participant wallet to act on this agreement.
             </div>
-          )}
-          {statusName === 'ACTIVE' && (
+          ) : statusName === 'ACTIVE' ? (
             <div className="notice success">
               All acceptances and contributions are complete — the deposit is locked and the
               agreement is ACTIVE.
             </div>
-          )}
-          {authStatus !== 'authenticated' && (
-            <div className="notice">
-              <Link to="/login">Sign in</Link> with a participant wallet to act on this agreement.
-            </div>
+          ) : statusName === 'FUNDING' ? (
+            <>
+              <WalletMismatchNotice role={role} />
+              {role.isRecipient && <RecipientAcceptanceCard {...commonProps} />}
+              {role.isTenant && (
+                <>
+                  {role.isCreator && (
+                    <div className="notice">
+                      You created this agreement <strong>and</strong> you are one of its tenants.
+                      Creating it gave you no special power over the funds — you still accept and
+                      fund your own contribution like any tenant, and you cannot move anyone
+                      else's money.
+                    </div>
+                  )}
+                  <TenantAcceptanceCard {...commonProps} />
+                  <TenantFundingCard {...commonProps} />
+                  <TenantWithdrawCard {...commonProps} />
+                </>
+              )}
+              <ReadOnlyParticipantCard role={role} />
+            </>
+          ) : (
+            <div className="notice">This agreement is {statusName.toLowerCase()}.</div>
           )}
         </>
       )}

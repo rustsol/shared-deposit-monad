@@ -1,0 +1,275 @@
+// Explicit, role-specific action components. Each renders only for its role,
+// with permissions taken from the shared role resolver — no generic card that
+// morphs labels between tenant and recipient. Every write uses useContractTx
+// and only reports VERIFIED after a direct contract-state re-read confirms the
+// change.
+
+import { useState } from 'react'
+import { monToWei, weiToMon } from '../lib/format'
+import type { AgreementRole } from '../hooks/useAgreementRole'
+import { useContractTx } from '../hooks/useContractTx'
+import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
+
+interface Common {
+  role: AgreementRole
+  recipientAccepted: boolean
+  contractAddress: `0x${string}`
+  agreementId: bigint
+  termsHash: `0x${string}`
+  refetch: () => Promise<void>
+  /** Reads acceptance back from the contract for the VERIFIED check. */
+  readAccepted: (kind: 'tenant' | 'recipient') => Promise<boolean>
+  /** Reads the connected tenant's exact funded amount from the contract. */
+  readFunded: () => Promise<bigint>
+}
+
+const contractOf = (address: `0x${string}`) =>
+  ({ address, abi: sharedDepositEscrowAbi }) as const
+
+export function WalletMismatchNotice({ role }: { role: AgreementRole }) {
+  if (role.walletMatchesSession) return null
+  return (
+    <div className="notice warn">
+      Your connected wallet does not match your signed-in session. Reconnect the
+      wallet you signed in with, or sign in again with the connected wallet, before
+      taking any action. Actions are disabled until they match.
+    </div>
+  )
+}
+
+export function RecipientAcceptanceCard(props: Common) {
+  const { role, recipientAccepted, contractAddress, agreementId, termsHash, refetch, readAccepted } =
+    props
+  const { send } = useContractTx()
+
+  return (
+    <div className="card">
+      <h2>Your role: deposit recipient</h2>
+      <p className="muted">
+        Tenants fund the escrow. <strong>The deposit recipient does not deposit funds</strong> —
+        there is no contribution required from you.
+      </p>
+      <dl className="kv">
+        <dt>Acceptance</dt>
+        <dd>{recipientAccepted ? 'Accepted' : 'Not accepted'}</dd>
+        <dt>Contribution</dt>
+        <dd className="muted">No contribution required</dd>
+      </dl>
+      {recipientAccepted ? (
+        <div className="notice success">Recipient accepted.</div>
+      ) : role.fundingDeadlinePassed ? (
+        <div className="notice warn">
+          The funding deadline has passed, so recipient acceptance is closed. This
+          agreement can no longer activate and can only be cancelled.
+        </div>
+      ) : (
+        <button
+          className="primary"
+          disabled={!role.canAcceptAsRecipient}
+          onClick={() =>
+            void send({
+              label: 'Accept as deposit recipient',
+              functionName: 'acceptAsRecipient',
+              ...contractOf(contractAddress),
+              args: [agreementId, termsHash],
+              verify: async () => {
+                const accepted = await readAccepted('recipient')
+                await refetch()
+                return accepted
+              },
+            })
+          }
+        >
+          Accept as deposit recipient
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function TenantAcceptanceCard(props: Common) {
+  const { role, contractAddress, agreementId, termsHash, refetch, readAccepted } = props
+  const { send } = useContractTx()
+  if (!role.tenantRecord) return null
+
+  if (role.tenantRecord.accepted) {
+    return <div className="notice success">You have accepted this agreement as a tenant.</div>
+  }
+  return (
+    <div className="card">
+      <h2>Accept as tenant</h2>
+      <p className="muted small">
+        Accepting records your acceptance onchain. You must accept before you can fund
+        your contribution.
+      </p>
+      {role.fundingDeadlinePassed ? (
+        <div className="notice warn">
+          The funding deadline has passed — acceptance is closed and this agreement can
+          only be cancelled.
+        </div>
+      ) : (
+        <button
+          className="primary"
+          disabled={!role.canAcceptAsTenant}
+          onClick={() =>
+            void send({
+              label: 'Accept agreement (tenant)',
+              functionName: 'acceptAsTenant',
+              ...contractOf(contractAddress),
+              args: [agreementId, termsHash],
+              verify: async () => {
+                const accepted = await readAccepted('tenant')
+                await refetch()
+                return accepted
+              },
+            })
+          }
+        >
+          Accept agreement
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function TenantFundingCard(props: Common) {
+  const { role, contractAddress, agreementId, refetch, readFunded } = props
+  const { send } = useContractTx()
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const tenant = role.tenantRecord
+  if (!tenant || !tenant.accepted) return null
+
+  async function deposit() {
+    setError(null)
+    let value: bigint
+    try {
+      value = monToWei(amount)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'invalid amount')
+      return
+    }
+    if (value <= 0n) return setError('Enter an amount greater than zero.')
+    if (value > role.remaining)
+      return setError(`Maximum remaining contribution is ${weiToMon(role.remaining)} MON.`)
+    const before = tenant!.fundedAmount
+    await send({
+      label: `Deposit ${amount} MON`,
+      functionName: 'deposit',
+      ...contractOf(contractAddress),
+      args: [agreementId],
+      value,
+      verify: async () => {
+        const funded = await readFunded()
+        await refetch()
+        return funded > before // exact on-chain funded amount increased
+      },
+    })
+    setAmount('')
+  }
+
+  return (
+    <div className="card">
+      <h2>Fund your contribution</h2>
+      <dl className="kv small">
+        <dt>Required</dt><dd className="amount">{weiToMon(tenant.requiredAmount)} MON</dd>
+        <dt>Funded</dt><dd className="amount">{weiToMon(tenant.fundedAmount)} MON</dd>
+        <dt>Remaining</dt><dd className="amount">{weiToMon(role.remaining)} MON</dd>
+      </dl>
+      {role.remaining === 0n ? (
+        <div className="notice success">Your contribution is fully funded.</div>
+      ) : role.fundingDeadlinePassed ? (
+        <div className="notice warn">
+          The funding deadline has passed — no further deposits are accepted.
+        </div>
+      ) : (
+        <>
+          <p className="muted small">Partial deposits are allowed, up to your remaining amount.</p>
+          <label className="field">
+            <span className="name">Amount (MON)</span>
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
+          </label>
+          <button className="primary" disabled={!role.canDeposit} onClick={() => void deposit()}>
+            Deposit
+          </button>{' '}
+          <button
+            className="secondary"
+            disabled={!role.canDeposit}
+            onClick={() => setAmount(weiToMon(role.remaining))}
+          >
+            Fill remaining
+          </button>
+        </>
+      )}
+      {error && <div className="notice error">{error}</div>}
+    </div>
+  )
+}
+
+export function TenantWithdrawCard(props: Common) {
+  const { role, contractAddress, agreementId, refetch, readFunded } = props
+  const { send } = useContractTx()
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const tenant = role.tenantRecord
+  if (!tenant || tenant.fundedAmount === 0n) return null
+
+  async function withdraw() {
+    setError(null)
+    let value: bigint
+    try {
+      value = monToWei(amount)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'invalid amount')
+      return
+    }
+    if (value <= 0n || value > tenant!.fundedAmount)
+      return setError(`You can withdraw up to ${weiToMon(tenant!.fundedAmount)} MON.`)
+    const before = tenant!.fundedAmount
+    await send({
+      label: `Withdraw ${amount} MON (pre-activation)`,
+      functionName: 'withdrawFundingBeforeActivation',
+      ...contractOf(contractAddress),
+      args: [agreementId, value],
+      verify: async () => {
+        const funded = await readFunded()
+        await refetch()
+        return funded < before
+      },
+    })
+    setAmount('')
+  }
+
+  return (
+    <div className="card">
+      <h2>Withdraw before activation</h2>
+      <p className="muted small">
+        Withdrawing your own funding keeps the agreement from activating until you
+        deposit it again. You can only ever withdraw your own contribution.
+      </p>
+      <label className="field">
+        <span className="name">Amount (MON)</span>
+        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
+      </label>
+      <button className="secondary" disabled={!role.canWithdrawFunding} onClick={() => void withdraw()}>
+        Withdraw
+      </button>
+      {error && <div className="notice error">{error}</div>}
+    </div>
+  )
+}
+
+export function ReadOnlyParticipantCard({ role }: { role: AgreementRole }) {
+  if (role.isParticipant) return null
+  return (
+    <div className="card">
+      <h2>Read-only</h2>
+      <p className="muted">
+        The connected wallet is not a participant in this agreement. You can view the
+        public onchain state, but no actions are available.
+      </p>
+    </div>
+  )
+}
