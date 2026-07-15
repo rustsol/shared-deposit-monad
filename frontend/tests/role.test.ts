@@ -152,4 +152,38 @@ describe('role resolution', () => {
     expect(role.canAcceptAsTenant).toBe(false)
     expect(role.canDeposit).toBe(false)
   })
+
+  // Reported bug: connected as the configured recipient, the UI must never
+  // present tenant controls. Role is keyed on the CONNECTED wallet, so the
+  // recipient is never a tenant regardless of who the session belongs to.
+  test('configured recipient is never a tenant and never sees tenant controls', () => {
+    const matched = resolve(RECIPIENT, RECIPIENT)
+    expect(matched.isRecipient).toBe(true)
+    expect(matched.isTenant).toBe(false)
+    expect(matched.tenantRecord).toBeNull()
+    expect(matched.canAcceptAsTenant).toBe(false)
+    expect(matched.canDeposit).toBe(false)
+    expect(matched.canAcceptAsRecipient).toBe(true)
+
+    // Even during a session mismatch, the recipient connection never becomes a
+    // tenant — it just has no enabled actions until re-auth.
+    const mismatched = resolve(RECIPIENT, TENANT_B)
+    expect(mismatched.isRecipient).toBe(true)
+    expect(mismatched.isTenant).toBe(false)
+    expect(mismatched.canAcceptAsTenant).toBe(false)
+  })
+
+  test('switching the connected account recomputes the role from the new wallet', () => {
+    const asTenant = resolve(TENANT_B, TENANT_B)
+    expect(asTenant.isTenant).toBe(true)
+    expect(asTenant.isRecipient).toBe(false)
+
+    // Same session inputs, different connected wallet → recipient role, no
+    // leaked tenant permissions from the previous account.
+    const asRecipient = resolve(RECIPIENT, RECIPIENT)
+    expect(asRecipient.isRecipient).toBe(true)
+    expect(asRecipient.isTenant).toBe(false)
+    expect(asRecipient.canAcceptAsTenant).toBe(false)
+    expect(asRecipient.canDeposit).toBe(false)
+  })
 })

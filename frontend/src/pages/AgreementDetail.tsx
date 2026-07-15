@@ -14,6 +14,7 @@ import { formatTimestamp, shortAddress, weiToMon } from '../lib/format'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 import { useAuth } from '../app/AuthContext'
 import {
+  AccountMismatchCard,
   ReadOnlyParticipantCard,
   RecipientAcceptanceCard,
   TenantAcceptanceCard,
@@ -69,7 +70,7 @@ export default function AgreementDetail() {
   const contractAddress = params.contractAddress as `0x${string}`
   const agreementId = BigInt(params.agreementId ?? '0')
   const { address } = useAccount()
-  const { status: authStatus, wallet: authWallet } = useAuth()
+  const { status: authStatus, wallet: authWallet, accountMismatch } = useAuth()
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview')
 
   const contract = { address: contractAddress, abi: sharedDepositEscrowAbi } as const
@@ -105,11 +106,13 @@ export default function AgreementDetail() {
     retry: false,
   })
 
-  // Dual-provider Monad Testnet health. Writes are gated on this being healthy,
-  // so a wallet that reports chain 10143 but broadcasts to a broken RPC cannot
-  // open a transaction.
+  // Dual-provider Monad Testnet health. Writes are gated on NETWORK readiness
+  // only (both chains 10143, app RPC returns a block, contract visible through
+  // the app RPC). Optional injected-provider reads (nonce, wallet balance) are
+  // diagnostic and never gate. Identity (account) mismatch is handled
+  // separately by the AccountMismatchCard, not by this flag.
   const diagnostics = useWalletNetworkDiagnostics({ contractAddress })
-  const networkHealthy = diagnostics.data?.overallHealth === 'healthy'
+  const networkReady = diagnostics.data?.networkReady ?? false
 
   const agreement = agreementRead.data as RawAgreement | undefined
 
@@ -207,7 +210,7 @@ export default function AgreementDetail() {
     refetch: refetchAll,
     readAccepted,
     readFunded,
-    networkHealthy,
+    networkHealthy: networkReady,
   }
 
   return (
@@ -337,14 +340,18 @@ export default function AgreementDetail() {
             </p>
           </div>
 
-          {authStatus === 'authenticated' && statusName === 'FUNDING' && role.isParticipant && (
-            <NetworkDiagnosticsPanel
-              data={diagnostics.data}
-              loading={diagnostics.loading}
-              recheck={diagnostics.recheck}
-            />
-          )}
-          {authStatus !== 'authenticated' ? (
+          {(authStatus === 'authenticated' || accountMismatch) &&
+            statusName === 'FUNDING' &&
+            role.isParticipant && (
+              <NetworkDiagnosticsPanel
+                data={diagnostics.data}
+                loading={diagnostics.loading}
+                recheck={diagnostics.recheck}
+              />
+            )}
+          {accountMismatch && authWallet && address ? (
+            <AccountMismatchCard sessionWallet={authWallet} connectedWallet={address} />
+          ) : authStatus !== 'authenticated' ? (
             <div className="notice">
               <Link to="/login">Sign in</Link> with a participant wallet to act on this agreement.
             </div>
@@ -356,10 +363,10 @@ export default function AgreementDetail() {
           ) : statusName === 'FUNDING' ? (
             <>
               <WalletMismatchNotice role={role} />
-              {role.isParticipant && !networkHealthy && (
+              {role.isParticipant && !networkReady && (
                 <div className="notice warn">
-                  Actions are disabled until the wallet network health above shows{' '}
-                  <strong>Healthy</strong>. Use Recheck / Switch to Monad Testnet.
+                  Actions are disabled until <strong>Network ready</strong> shows{' '}
+                  <strong>Yes</strong> above. Use Recheck / Switch to Monad Testnet.
                 </div>
               )}
               {role.isRecipient && <RecipientAcceptanceCard {...commonProps} />}

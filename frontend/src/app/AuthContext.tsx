@@ -31,9 +31,16 @@ interface MeResponse {
 
 interface AuthState {
   status: AuthStatus
+  /** The authenticated session wallet (from /auth/me). Retained even when a
+   *  different wallet is connected, so the UI can offer a productive re-auth. */
   wallet: string | null
+  /** True when a session exists but the connected wallet is a different
+   *  address — an ACCOUNT problem, not a network fault. */
+  accountMismatch: boolean
   error: string | null
   signIn: () => Promise<void>
+  /** Revoke the current session/CSRF and sign in as the connected wallet. */
+  signInAsConnected: () => Promise<void>
   signOut: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -75,9 +82,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // wallet account switch as no longer authenticated for UI purposes.
   const effectiveStatus =
     status === 'authenticated' &&
-    (!isConnected || (address && wallet && address.toLowerCase() !== wallet))
+    (!isConnected || (address && wallet && address.toLowerCase() !== wallet.toLowerCase()))
       ? 'anonymous'
       : status
+
+  // A real session exists for a DIFFERENT connected wallet. This is an account
+  // change to be resolved by re-authenticating — never an RPC/network fault.
+  const accountMismatch = Boolean(
+    status === 'authenticated' &&
+      isConnected &&
+      address &&
+      wallet &&
+      address.toLowerCase() !== wallet.toLowerCase(),
+  )
+
+  // On a wallet account change, clear any stale sign-in error so the account
+  // mismatch surfaces cleanly. Role data is derived from the connected address
+  // downstream and recomputes on its own.
+  useEffect(() => {
+    setError(null)
+  }, [address])
 
   const signIn = useCallback(async () => {
     if (!address) throw new Error('connect a wallet first')
@@ -145,9 +169,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('anonymous')
   }, [])
 
+  // Productive account switch: revoke the old session + CSRF, then run the
+  // EIP-4361 flow for the currently connected wallet. No manual cookie clearing.
+  const signInAsConnected = useCallback(async () => {
+    await signOut()
+    await signIn()
+  }, [signOut, signIn])
+
   return (
     <AuthContext.Provider
-      value={{ status: effectiveStatus, wallet, error, signIn, signOut, refresh }}
+      value={{
+        status: effectiveStatus,
+        wallet,
+        accountMismatch,
+        error,
+        signIn,
+        signInAsConnected,
+        signOut,
+        refresh,
+      }}
     >
       {children}
     </AuthContext.Provider>

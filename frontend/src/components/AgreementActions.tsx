@@ -5,10 +5,12 @@
 // change.
 
 import { useState } from 'react'
-import { monToWei, weiToMon } from '../lib/format'
+import { useDisconnect } from 'wagmi'
+import { monToWei, weiToMon, shortAddress } from '../lib/format'
 import { monadTestnet } from '../lib/chain'
 import type { AgreementRole } from '../hooks/useAgreementRole'
 import { useContractTx } from '../hooks/useContractTx'
+import { useAuth } from '../app/AuthContext'
 import { makeActionKey, useTx } from '../app/TxContext'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 
@@ -39,6 +41,55 @@ function actionKeyFor(props: Common, functionName: string): string {
     functionName,
     wallet: props.role.connectedWallet ?? '',
   })
+}
+
+/**
+ * Shown when a session exists but a DIFFERENT wallet is connected. This is an
+ * account change, not a network fault — so it replaces every participant action
+ * card until the connected wallet re-authenticates and the role is recomputed.
+ */
+export function AccountMismatchCard({
+  sessionWallet,
+  connectedWallet,
+}: {
+  sessionWallet: string
+  connectedWallet: string
+}) {
+  const { signInAsConnected, status, error } = useAuth()
+  const { disconnect } = useDisconnect()
+  const [busy, setBusy] = useState(false)
+  const signing = busy || status === 'signing' || status === 'verifying'
+
+  async function signIn() {
+    setBusy(true)
+    try {
+      await signInAsConnected()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Connected wallet changed</h2>
+      <p>
+        You are signed in as <span className="mono">{shortAddress(sessionWallet)}</span>, but your
+        wallet is connected as <span className="mono">{shortAddress(connectedWallet)}</span>.
+      </p>
+      <p className="muted small">
+        Sign in with the connected wallet to continue. Your previous session will be revoked and a
+        new signature will be requested for the connected wallet — no need to clear cookies or
+        storage.
+      </p>
+      <button className="primary" disabled={signing} onClick={() => void signIn()}>
+        {signing ? 'Signing in…' : 'Sign in as connected wallet'}
+      </button>{' '}
+      <button className="secondary" disabled={signing} onClick={() => disconnect()}>
+        Reconnect previous wallet
+      </button>
+      {error && <div className="notice error">{error}</div>}
+    </div>
+  )
 }
 
 export function WalletMismatchNotice({ role }: { role: AgreementRole }) {
