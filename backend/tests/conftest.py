@@ -171,6 +171,7 @@ def clean_tables(test_db_engine: Engine) -> Iterator[Engine]:
             "chain_sync_state",
             "claim_drafts",
             "claim_index",
+            "contract_transactions",
             "evidence_files",
             "evidence_manifests",
             "invitations",

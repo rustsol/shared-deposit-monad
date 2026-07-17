@@ -55,6 +55,8 @@ class Settings(BaseSettings):
 
     log_block_chunk_size: int = Field(default=100, alias="LOG_BLOCK_CHUNK_SIZE")
     chain_poll_seconds: int = Field(default=5, alias="CHAIN_POLL_SECONDS")
+    # How long a recorded hash may stay unobserved before it is NOT_FOUND.
+    tx_not_found_seconds: int = Field(default=900, alias="TX_NOT_FOUND_SECONDS")
 
     evidence_storage_root: str = Field(default="./storage/evidence", alias="EVIDENCE_STORAGE_ROOT")
     evidence_max_files: int = Field(default=5, alias="EVIDENCE_MAX_FILES")

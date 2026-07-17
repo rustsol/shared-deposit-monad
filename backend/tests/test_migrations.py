@@ -22,14 +22,15 @@ EXPECTED_TABLES = {
     "chain_events",
     "chain_sync_state",
     "audit_log",
+    "contract_transactions",
 }
 
 
-def test_all_fifteen_documented_tables_exist(test_db_engine: Engine) -> None:
+def test_all_documented_tables_exist(test_db_engine: Engine) -> None:
     tables = set(inspect(test_db_engine).get_table_names())
     assert EXPECTED_TABLES <= tables
     assert "alembic_version" in tables
-    assert len(EXPECTED_TABLES) == 15
+    assert len(EXPECTED_TABLES) == 16
 
 
 def test_current_revision_is_head(test_db_engine: Engine) -> None:
@@ -58,6 +59,7 @@ def test_expected_unique_constraints_and_indexes(test_db_engine: Engine) -> None
     assert {"token_hash"} in unique_column_sets("invitations")
     assert {"manifest_hash"} in unique_column_sets("evidence_manifests")
     assert {"terms_hash"} in unique_column_sets("agreement_drafts")
+    assert {"chain_id", "tx_hash"} in unique_column_sets("contract_transactions")
 
     index_columns = {tuple(ix["column_names"]) for ix in inspector.get_indexes("chain_events")}
     assert ("block_number",) in index_columns

@@ -306,6 +306,28 @@ def dashboard(
     )
 
 
+def _participant_index(
+    db: Session, chain_id: int, contract_address: str, agreement_id: int, wallet: str
+) -> tuple[AgreementIndex, AgreementMetadata | None]:
+    """The agreement_index row, but only for a participant wallet. 404
+    otherwise — non-participants cannot even learn the agreement exists."""
+    key = (chain_id, contract_address.lower(), Decimal(agreement_id))
+    index = db.get(AgreementIndex, key)
+    metadata = db.get(AgreementMetadata, key)
+    participant = False
+    if index is not None:
+        participant = wallet in (index.creator_address, index.recipient_address)
+    if not participant and metadata is not None:
+        tenant_wallets = [
+            str(entry.get("wallet", "")).lower()
+            for entry in metadata.terms_json.get("tenantContributions", [])
+        ]
+        participant = wallet in tenant_wallets
+    if index is None or not participant:
+        raise HTTPException(404, "agreement metadata not available")
+    return index, metadata
+
+
 @router.get(
     "/agreements/{chain_id}/{contract_address}/{agreement_id}/metadata",
     response_model=AgreementMetadataResponse,
@@ -319,21 +341,9 @@ def agreement_metadata(
 ) -> AgreementMetadataResponse:
     """Private offchain metadata (alias, terms JSON) for participants only.
     All financial state comes from direct contract reads in the browser."""
-    key = (chain_id, contract_address.lower(), Decimal(agreement_id))
-    index = db.get(AgreementIndex, key)
-    metadata = db.get(AgreementMetadata, key)
-    wallet = session.wallet_address
-    participant = False
-    if index is not None:
-        participant = wallet in (index.creator_address, index.recipient_address)
-    if not participant and metadata is not None:
-        tenant_wallets = [
-            str(entry.get("wallet", "")).lower()
-            for entry in metadata.terms_json.get("tenantContributions", [])
-        ]
-        participant = wallet in tenant_wallets
-    if index is None or not participant:
-        raise HTTPException(404, "agreement metadata not available")
+    index, metadata = _participant_index(
+        db, chain_id, contract_address, agreement_id, session.wallet_address
+    )
     return AgreementMetadataResponse(
         chain_id=chain_id,
         contract_address=contract_address.lower(),

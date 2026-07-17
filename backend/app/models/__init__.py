@@ -18,6 +18,7 @@ from app.models.chain import ChainEvent, ChainSyncState
 from app.models.claims import ClaimDraft, ClaimIndex
 from app.models.evidence import EvidenceFile, EvidenceManifest
 from app.models.invitations import Invitation
+from app.models.transactions import ContractTransaction
 from app.models.wallet import WalletProfile
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "ChainSyncState",
     "ClaimDraft",
     "ClaimIndex",
+    "ContractTransaction",
     "EvidenceFile",
     "EvidenceManifest",
     "Invitation",

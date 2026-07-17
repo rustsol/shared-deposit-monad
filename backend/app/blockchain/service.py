@@ -134,6 +134,47 @@ class ChainService:
     def get_code(self, address: str) -> str:
         return "0x" + bytes(self.web3.eth.get_code(Web3.to_checksum_address(address))).hex()
 
+    def get_block_header(self, block_number: int) -> dict[str, Any]:
+        """Hash and timestamp only — enough to timestamp a mined receipt."""
+        block = self.web3.eth.get_block(block_number)
+        return {
+            "hash": "0x" + bytes(block["hash"]).hex(),
+            "timestamp": int(block["timestamp"]),
+        }
+
+    def get_transaction_facts(self, tx_hash: str) -> dict[str, Any] | None:
+        """Normalized public facts of one transaction, or None while the node
+        does not know the hash. Never raises for an unknown hash."""
+        try:
+            tx = self.web3.eth.get_transaction(tx_hash)  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 - unknown/pending hashes raise in web3
+            return None
+        block_number = tx.get("blockNumber")
+        return {
+            "hash": "0x" + bytes(tx["hash"]).hex(),
+            "from": str(tx["from"]).lower(),
+            "to": str(tx["to"]).lower() if tx.get("to") else None,
+            "input": "0x" + bytes(tx["input"]).hex(),
+            "value": str(int(tx["value"])),
+            "nonce": int(tx["nonce"]),
+            "blockNumber": int(block_number) if block_number is not None else None,
+        }
+
+    def get_receipt_facts(self, tx_hash: str) -> dict[str, Any] | None:
+        """Normalized receipt facts, or None while no receipt exists."""
+        try:
+            receipt = self.web3.eth.get_transaction_receipt(tx_hash)  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 - receipt not available yet
+            return None
+        return {
+            "status": int(receipt["status"]),
+            "blockNumber": int(receipt["blockNumber"]),
+            "blockHash": "0x" + bytes(receipt["blockHash"]).hex(),
+            "to": str(receipt["to"]).lower() if receipt.get("to") else None,
+            "from": str(receipt["from"]).lower(),
+            "logs": [dict(log) for log in receipt["logs"]],
+        }
+
     # ------------------------------------------------------------ contract reads
 
     def _contract(self) -> Any:

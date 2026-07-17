@@ -304,7 +304,7 @@ class TestSchemaSecurityShape:
         db_session.flush()
 
     def test_model_count_matches_documented_tables(self) -> None:
-        assert len(Base.metadata.tables) == 15
+        assert len(Base.metadata.tables) == 16
 
     def test_all_models_use_innodb_and_utf8mb4(self, test_db_engine: object) -> None:
         from sqlalchemy import Engine, text

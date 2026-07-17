@@ -20,6 +20,7 @@ from app.models import AgreementDraft, AgreementDraftTenant
 from tests.fixtures.wallets import KEY_FOR, sign_message
 
 AUTH_TABLES = [
+    "contract_transactions",
     "agreement_metadata",
     "agreement_index",
     "audit_log",
