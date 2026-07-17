@@ -27,6 +27,8 @@ import {
   type AgreementSnapshot,
   type TenantSnapshot,
 } from '../hooks/useAgreementRole'
+import { useAgreementCacheSync } from '../hooks/useAgreementCacheSync'
+import { AgreementActivity } from '../components/AgreementActivity'
 import { NetworkDiagnosticsPanel } from '../components/NetworkDiagnosticsPanel'
 import { useWalletNetworkDiagnostics } from '../hooks/useWalletNetworkDiagnostics'
 
@@ -115,6 +117,18 @@ export default function AgreementDetail() {
   const networkReady = diagnostics.data?.networkReady ?? false
 
   const agreement = agreementRead.data as RawAgreement | undefined
+
+  // Stored application transactions + page-load cache repair. The direct
+  // contract reads above stay authoritative for everything actionable; when
+  // the DB status cache disagrees with them, the backend refreshes it from
+  // its own direct contract read.
+  const cacheSync = useAgreementCacheSync({
+    chainId: params.chainId,
+    contractAddress,
+    agreementId: params.agreementId,
+    onchainStatusName: agreement ? (STATUS_NAMES[agreement.status] ?? 'NONE') : null,
+    enabled: authStatus === 'authenticated',
+  })
 
   const tenantRecords = useMemo(() => {
     const results = tenantRecordsRead.data ?? []
@@ -397,21 +411,15 @@ export default function AgreementDetail() {
         <div className="card">
           <h2>Activity</h2>
           <p className="muted small">
-            Shown here: the verified creation transaction and transactions from your current
-            session (in the drawer). This is not the complete blockchain history — the full
-            event timeline arrives with the chain indexer in a later phase.
+            Verified application transactions stored for this agreement. Current status and
+            balances above always come from direct contract reads.
           </p>
-          {metadata.data?.creation_tx_hash ? (
-            <p>
-              Agreement created ·{' '}
-              <a href={`${EXPLORER_TX}${metadata.data.creation_tx_hash}`} className="mono" target="_blank" rel="noreferrer">
-                {shortAddress(metadata.data.creation_tx_hash)} ↗
-              </a>{' '}
-              <span className="badge">verified onchain</span>
-            </p>
-          ) : (
-            <p className="muted">Sign in as a participant to see registration details.</p>
-          )}
+          <AgreementActivity
+            transactions={cacheSync.transactions}
+            isLoading={cacheSync.isLoading}
+            isError={cacheSync.isError}
+            authenticated={authStatus === 'authenticated'}
+          />
         </div>
       )}
 
