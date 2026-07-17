@@ -31,6 +31,7 @@ export function AgreementActivity(props: {
       {rows.length === 0 ? (
         <p className="muted">No application transactions are stored for this agreement yet.</p>
       ) : (
+        <div className="table-scroll">
         <table className="data">
           <thead>
             <tr>
@@ -71,6 +72,7 @@ export function AgreementActivity(props: {
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <p className="muted small">
         This timeline shows transactions made through this application, verified by their

@@ -8,6 +8,15 @@ import { isAddress } from 'viem'
 import { useAuth } from '../app/AuthContext'
 import { api, ApiError } from '../lib/api'
 import { fundingDeadlineWarning, monToWei } from '../lib/format'
+import {
+  AmountDisplay,
+  ConfirmationPanel,
+  DateField,
+  FormField,
+  PageHeader,
+  Stepper,
+  WalletAddress,
+} from '../components/ui'
 
 const STEPS = ['Basics', 'Participants', 'Contributions', 'Rules & dates', 'Review'] as const
 
@@ -160,43 +169,61 @@ export default function NewAgreement() {
   }
 
   return (
-    <main className="page">
-      <h1>Create a shared deposit</h1>
-      <div className="steps" role="list">
-        {STEPS.map((name, index) => (
-          <span
-            key={name}
-            role="listitem"
-            className={`step ${index === step ? 'current' : index < step ? 'done' : ''}`}
-          >
-            {index + 1}. {name}
-          </span>
-        ))}
-      </div>
+    <main className="page narrow">
+      <PageHeader
+        title="Create a shared deposit"
+        lead="Set the property, people, contributions, and dates. Nothing goes onchain until you approve the creation transaction on the next screen."
+      />
+      <Stepper steps={STEPS} current={step} />
 
       {step === 0 && (
         <div className="card">
-          <label className="field">
-            <span className="name">Private rental alias</span>
-            <input value={alias} onChange={(e) => setAlias(e.target.value)} maxLength={160} placeholder="e.g. Indiranagar apartment" />
-          </label>
-          <label className="field">
-            <span className="name">Private address (optional, stays offchain)</span>
-            <input value={privateAddress} onChange={(e) => setPrivateAddress(e.target.value)} />
-          </label>
+          <FormField
+            label="Private rental alias"
+            hint="Only participants ever see this. It is never written onchain."
+          >
+            <input
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+              maxLength={160}
+              placeholder="e.g. Indiranagar apartment"
+            />
+          </FormField>
+          <FormField
+            label="Property address (optional)"
+            hint="The street address of the rental. Stays private, never onchain."
+          >
+            <input
+              value={privateAddress}
+              onChange={(e) => setPrivateAddress(e.target.value)}
+              placeholder="e.g. 12 Rose Street, 2nd floor"
+            />
+          </FormField>
           <div className="grid-two">
-            <label className="field"><span className="name">Lease start</span>
-              <input type="datetime-local" value={leaseStart} onChange={(e) => setLeaseStart(e.target.value)} /></label>
-            <label className="field"><span className="name">Lease end</span>
-              <input type="datetime-local" value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} /></label>
-            <label className="field"><span className="name">Funding deadline</span>
-              <input type="datetime-local" value={fundingDeadline} onChange={(e) => setFundingDeadline(e.target.value)} /></label>
-            <label className="field"><span className="name">Claim deadline</span>
-              <input type="datetime-local" value={claimDeadline} onChange={(e) => setClaimDeadline(e.target.value)} /></label>
-            <label className="field"><span className="name">Settlement deadline</span>
-              <input type="datetime-local" value={settlementDeadline} onChange={(e) => setSettlementDeadline(e.target.value)} /></label>
+            <DateField label="Lease start" value={leaseStart} onChange={setLeaseStart} />
+            <DateField label="Lease end" value={leaseEnd} onChange={setLeaseEnd} />
+            <DateField
+              label="Funding deadline"
+              hint="Everyone must accept and pay by this time."
+              value={fundingDeadline}
+              onChange={setFundingDeadline}
+            />
+            <DateField
+              label="Claim deadline"
+              hint="Deduction claims close at this time."
+              value={claimDeadline}
+              onChange={setClaimDeadline}
+            />
+            <DateField
+              label="Settlement deadline"
+              value={settlementDeadline}
+              onChange={setSettlementDeadline}
+            />
           </div>
-          <p className="muted small">Required order: funding deadline ≤ lease end &lt; claim deadline &lt; settlement deadline.</p>
+          <p className="muted small">
+            Required order: funding deadline ≤ lease end &lt; claim deadline &lt; settlement
+            deadline.
+          </p>
           {fundingDeadline &&
             fundingDeadlineWarning(toUnix(fundingDeadline), Math.floor(Date.now() / 1000)) && (
               <div className="notice warn">
@@ -208,10 +235,11 @@ export default function NewAgreement() {
 
       {step === 1 && (
         <div className="card">
-          <h3>Tenants</h3>
+          <h2>Tenants</h2>
           <p className="muted small">
-            Your connected wallet is tenant 1 and cannot be removed:{' '}
-            <span className="mono">{creatorWallet}</span>
+            You are tenant 1 (<WalletAddress address={creatorWallet} copyable={false} />) and
+            cannot be removed — the creator has no special authority and pays a share like
+            everyone else.
           </p>
           {tenants.map((tenant, index) => (
             <div key={index} className="grid-two">
@@ -237,14 +265,14 @@ export default function NewAgreement() {
               </label>
             </div>
           ))}
-          <p>
+          <div className="button-row">
             <button
               className="secondary"
               disabled={tenants.length >= 7}
               onClick={() => setTenants([...tenants, { wallet: '', displayLabel: '', amountMon: '' }])}
             >
               Add tenant
-            </button>{' '}
+            </button>
             <button
               className="secondary"
               disabled={tenants.length <= 1}
@@ -252,23 +280,33 @@ export default function NewAgreement() {
             >
               Remove last
             </button>
-          </p>
-          <h3>Deposit recipient (landlord / property manager)</h3>
-          <label className="field">
-            <span className="name">Recipient wallet</span>
-            <input className="mono" value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x…" />
-          </label>
-          <p className="muted small">The recipient cannot be one of the tenants.</p>
+          </div>
+          <h2>Deposit recipient</h2>
+          <FormField
+            label="Recipient wallet"
+            hint="The landlord or property manager who receives approved deductions. The recipient never deposits and cannot be one of the tenants."
+          >
+            <input
+              className="mono"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder="0x…"
+            />
+          </FormField>
         </div>
       )}
 
       {step === 2 && (
         <div className="card">
-          <h3>Exact contributions (Monad Testnet MON)</h3>
-          <label className="field">
-            <span className="name">Your contribution (tenant 1)</span>
-            <input inputMode="decimal" value={creatorAmount} onChange={(e) => setCreatorAmount(e.target.value)} placeholder="e.g. 0.5" />
-          </label>
+          <h2>Contributions (Monad Testnet MON)</h2>
+          <FormField label="Your contribution (tenant 1)">
+            <input
+              inputMode="decimal"
+              value={creatorAmount}
+              onChange={(e) => setCreatorAmount(e.target.value)}
+              placeholder="e.g. 0.5"
+            />
+          </FormField>
           {tenants.map((tenant, index) => (
             <label className="field" key={index}>
               <span className="name">
@@ -284,16 +322,20 @@ export default function NewAgreement() {
               />
             </label>
           ))}
-          <p className="amount">
-            Total required:{' '}
-            <strong>{totalWei !== null ? `${totalWei} wei` : 'enter valid amounts'}</strong>
+          <p>
+            Total deposit:{' '}
+            {totalWei !== null ? (
+              <AmountDisplay wei={totalWei} />
+            ) : (
+              <span className="muted">enter valid amounts</span>
+            )}
           </p>
         </div>
       )}
 
       {step === 3 && (
         <div className="card">
-          <h3>The rules you are agreeing to</h3>
+          <h2>The rules you are agreeing to</h2>
           <ul>
             <li><strong>Strict-majority voting</strong> — deduction claims need more than half of the tenants to vote YES.</li>
             <li><strong>Claim window</strong> — the recipient can submit claims only between lease end and the claim deadline.</li>
@@ -307,56 +349,76 @@ export default function NewAgreement() {
 
       {step === 4 && (
         <div className="card">
-          <h3>Review</h3>
-          <dl className="kv">
-            <dt>Alias</dt><dd>{alias}</dd>
-            <dt>Recipient</dt><dd className="mono">{recipient}</dd>
-            <dt>Tenants</dt>
-            <dd>
-              <span className="mono">{creatorWallet}</span> ({creatorAmount} MON)
-              {tenants.map((tenant, index) => (
-                <div key={index}>
-                  <span className="mono">{tenant.wallet}</span> ({tenant.amountMon} MON)
-                </div>
-              ))}
-            </dd>
-            <dt>Total</dt><dd className="amount">{totalWei !== null ? `${totalWei} wei` : '—'}</dd>
-          </dl>
+          <h2>Review</h2>
+          <ConfirmationPanel
+            rows={[
+              { label: 'Rental alias', value: alias },
+              { label: 'Deposit recipient', value: <WalletAddress address={recipient} copyable={false} /> },
+              {
+                label: 'Tenants',
+                value: (
+                  <>
+                    <div>
+                      <WalletAddress address={creatorWallet} copyable={false} /> — {creatorAmount}{' '}
+                      MON (you)
+                    </div>
+                    {tenants.map((tenant, index) => (
+                      <div key={index}>
+                        <WalletAddress address={tenant.wallet} copyable={false} /> —{' '}
+                        {tenant.amountMon} MON
+                      </div>
+                    ))}
+                  </>
+                ),
+              },
+              {
+                label: 'Total deposit',
+                value: totalWei !== null ? <AmountDisplay wei={totalWei} /> : '—',
+              },
+            ]}
+          />
           <div className="notice warn">
-            Creating the draft stores it privately. The onchain transaction (with the
-            frontend/backend hash comparison) happens on the next screen.
+            Saving stores this draft privately. The onchain creation transaction (with an
+            independent hash check in your browser) happens on the next screen.
           </div>
-          <label className="field">
+          <label className="check">
             <input
               type="checkbox"
-              style={{ width: 'auto', marginRight: '0.5rem' }}
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
             />
-            I understand the agreement cannot be edited after onchain creation.
+            <span>I understand the agreement cannot be edited after onchain creation.</span>
           </label>
         </div>
       )}
 
-      {error && <div className="notice error">{error}</div>}
+      {error && (
+        <div className="notice error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <p>
+      <div className="button-row">
         {step > 0 && (
           <button className="secondary" onClick={() => setStep(step - 1)}>
             Back
           </button>
-        )}{' '}
+        )}
         {step < STEPS.length - 1 && (
           <button className="primary" onClick={next}>
             Continue
           </button>
         )}
         {step === STEPS.length - 1 && (
-          <button className="primary" disabled={!acknowledged || submitting} onClick={() => void submit()}>
+          <button
+            className="primary"
+            disabled={!acknowledged || submitting}
+            onClick={() => void submit()}
+          >
             {submitting ? 'Saving draft…' : 'Save draft & continue'}
           </button>
         )}
-      </p>
+      </div>
     </main>
   )
 }

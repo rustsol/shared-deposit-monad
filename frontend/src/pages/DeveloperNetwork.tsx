@@ -31,7 +31,7 @@ export default function DeveloperNetwork() {
   if (!isDev) {
     return (
       <main className="page">
-        <h1>Not found</h1>
+        <h1>Page not found</h1>
       </main>
     )
   }
@@ -58,7 +58,11 @@ export default function DeveloperNetwork() {
 
   return (
     <main className="page">
-      <h1>Network diagnostics (development)</h1>
+      <h1>Network diagnostics</h1>
+      <p className="muted small">
+        Development-only view of the dual-provider health checks. Nothing here is required for
+        normal use.
+      </p>
       <div className="card small">
         <dl className="kv">
           <dt>Environment</dt><dd>{config.data?.environment ?? '—'}</dd>

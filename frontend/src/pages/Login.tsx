@@ -1,8 +1,12 @@
+// Wallet sign-in: connect, then sign a message. The copy is explicit that a
+// sign-in signature is not a blockchain transaction.
+
 import { useNavigate } from 'react-router-dom'
 import { useAccount, useChainId } from 'wagmi'
 import { monadTestnet } from '../lib/chain'
 import { useAuth } from '../app/AuthContext'
 import { WalletStatus } from '../app/Shell'
+import { PageHeader, WalletAddress } from '../components/ui'
 
 export default function Login() {
   const { isConnected } = useAccount()
@@ -12,42 +16,50 @@ export default function Login() {
 
   if (status === 'authenticated' && wallet) {
     return (
-      <main className="page">
-        <h1>Signed in</h1>
+      <main className="page narrow">
+        <PageHeader title="You're signed in" />
         <div className="notice success">
-          Authenticated as <span className="mono">{wallet}</span>
+          Signed in as <WalletAddress address={wallet} />
         </div>
         <button className="primary" onClick={() => navigate('/dashboard')}>
-          Go to dashboard
+          Go to your dashboard
         </button>
       </main>
     )
   }
 
   return (
-    <main className="page">
-      <h1>Sign in with your wallet</h1>
+    <main className="page narrow">
+      <PageHeader
+        title="Sign in with your wallet"
+        lead="Two quick steps: connect your wallet, then sign a message to prove it's yours."
+      />
       <div className="card">
-        <h3>1. Connect your wallet</h3>
-        <p className="muted small">MetaMask, Rabby, or any injected wallet.</p>
+        <h2>1. Connect your wallet</h2>
+        <p className="muted small">MetaMask, Rabby, or any browser wallet.</p>
         <WalletStatus />
         {isConnected && chainId !== monadTestnet.id && (
           <div className="notice warn">Switch to Monad Testnet (chain 10143) to continue.</div>
         )}
       </div>
       <div className="card">
-        <h3>2. Sign the sign-in message</h3>
+        <h2>2. Sign the sign-in message</h2>
         <p className="muted small">
           Signing proves you own the wallet. It is <strong>not a blockchain transaction</strong>:
           it moves no funds, costs no gas, and grants no contract permission.
         </p>
         <button
           className="primary"
-          disabled={!isConnected || chainId !== monadTestnet.id || status === 'signing' || status === 'verifying'}
+          disabled={
+            !isConnected ||
+            chainId !== monadTestnet.id ||
+            status === 'signing' ||
+            status === 'verifying'
+          }
           onClick={() => void signIn()}
         >
           {status === 'signing'
-            ? 'Waiting for signature…'
+            ? 'Waiting for your signature…'
             : status === 'verifying'
               ? 'Verifying…'
               : 'Sign in'}

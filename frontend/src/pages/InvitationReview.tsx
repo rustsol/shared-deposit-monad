@@ -6,8 +6,15 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../app/AuthContext'
-import { weiToMon } from '../lib/format'
 import { WalletStatus } from '../app/Shell'
+import {
+  AmountDisplay,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  PageHeader,
+  WalletAddress,
+} from '../components/ui'
 
 interface Review {
   status: string
@@ -43,7 +50,14 @@ export default function InvitationReview() {
     mutationFn: () => api<{ status: string; note: string }>(`/invitations/${token}/claim`, { method: 'POST' }),
   })
 
-  if (review.isLoading) return <main className="page">Checking invitation…</main>
+  if (review.isLoading) {
+    return (
+      <main className="page narrow">
+        <PageHeader title="Invitation" />
+        <LoadingSkeleton lines={3} label="Checking invitation" />
+      </main>
+    )
+  }
 
   const data = review.isError
     ? review.error instanceof ApiError && review.error.status === 404
@@ -53,24 +67,24 @@ export default function InvitationReview() {
 
   if (!data) {
     return (
-      <main className="page">
-        <div className="notice error">Backend unavailable — try again shortly.</div>
+      <main className="page narrow">
+        <ErrorState title="Backend unavailable">Try again shortly.</ErrorState>
       </main>
     )
   }
 
   if (TERMINAL[data.status]) {
     return (
-      <main className="page">
-        <h1>Invitation</h1>
-        <div className="notice warn">{TERMINAL[data.status]}</div>
+      <main className="page narrow">
+        <PageHeader title="Invitation" />
+        <EmptyState title="This link can no longer be used">{TERMINAL[data.status]}</EmptyState>
       </main>
     )
   }
 
   return (
-    <main className="page">
-      <h1>You're invited</h1>
+    <main className="page narrow">
+      <PageHeader title="You're invited" />
       <div className="card">
         {data.property_alias && (
           <p>
@@ -99,11 +113,16 @@ export default function InvitationReview() {
           <>
             <dl className="kv">
               <dt>Your wallet</dt>
-              <dd className="mono">{data.expected_wallet}</dd>
-              {data.required_amount_wei && (
+              <dd><WalletAddress address={data.expected_wallet ?? ''} /></dd>
+              {data.required_amount_wei ? (
                 <>
                   <dt>Your required contribution</dt>
-                  <dd className="amount">{weiToMon(data.required_amount_wei)} MON</dd>
+                  <dd><AmountDisplay wei={data.required_amount_wei} /></dd>
+                </>
+              ) : (
+                <>
+                  <dt>Your contribution</dt>
+                  <dd>No contribution required</dd>
                 </>
               )}
             </dl>

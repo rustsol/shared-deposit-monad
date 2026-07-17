@@ -1,7 +1,8 @@
 // Live agreement page. ALL financial and role state comes from DIRECT contract
 // reads (wagmi/viem against Monad Testnet). The backend supplies only the
-// private alias and terms metadata — never acceptance or funding state, and
-// never role. Role and permitted actions come from the shared resolver.
+// private alias, terms metadata, and stored transaction history — never
+// acceptance or funding state, and never role. Role and permitted actions
+// come from the shared resolver.
 
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -9,8 +10,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useAccount, useReadContract, useReadContracts } from 'wagmi'
 import { readContract } from 'wagmi/actions'
 import { api } from '../lib/api'
-import { EXPLORER_ADDRESS, EXPLORER_TX, monadTestnet, wagmiConfig } from '../lib/chain'
-import { formatTimestamp, shortAddress, weiToMon } from '../lib/format'
+import { EXPLORER_ADDRESS, EXPLORER_TX, wagmiConfig } from '../lib/chain'
+import { shortAddress } from '../lib/format'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 import { useAuth } from '../app/AuthContext'
 import {
@@ -22,18 +23,39 @@ import {
   TenantWithdrawCard,
   WalletMismatchNotice,
 } from '../components/AgreementActions'
+import { AgreementActivity } from '../components/AgreementActivity'
+import { NetworkDiagnosticsPanel } from '../components/NetworkDiagnosticsPanel'
+import {
+  AgreementProgress,
+  AmountDisplay,
+  DeadlineDisplay,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  PageHeader,
+  ParticipantCard,
+  ProofRow,
+  StatusBadge,
+  WalletAddress,
+  describeAgreementStatus,
+} from '../components/ui'
 import {
   resolveAgreementRole,
   type AgreementSnapshot,
   type TenantSnapshot,
 } from '../hooks/useAgreementRole'
 import { useAgreementCacheSync } from '../hooks/useAgreementCacheSync'
-import { AgreementActivity } from '../components/AgreementActivity'
-import { NetworkDiagnosticsPanel } from '../components/NetworkDiagnosticsPanel'
 import { useWalletNetworkDiagnostics } from '../hooks/useWalletNetworkDiagnostics'
 
 const STATUS_NAMES = ['NONE', 'FUNDING', 'ACTIVE', 'FINALIZED', 'CANCELLED'] as const
-const TABS = ['Overview', 'Participants & funding', 'Activity', 'Terms & proof'] as const
+const TABS = [
+  'Overview',
+  'Participants & funding',
+  'Claims',
+  'Settlement',
+  'Activity',
+  'Terms & proof',
+] as const
 
 interface Metadata {
   property_alias: string | null
@@ -54,18 +76,37 @@ type RawAgreement = {
   settlementDeadline: bigint
   tenantCount: number
   requiredApprovals: number
+  claimCount: number
+  unresolvedClaimCount: number
   totalRequired: bigint
   totalFunded: bigint
   recipientAccepted: boolean
+  recipientPayoutWithdrawn: boolean
   status: number
 }
 
 type RawTenant = {
   requiredAmount: bigint
   fundedAmount: bigint
+  refundAmount: bigint
   accepted: boolean
   exists: boolean
+  refundWithdrawn: boolean
 }
+
+type RawClaim = {
+  liableTenant: `0x${string}`
+  reasonHash: `0x${string}`
+  evidenceHash: `0x${string}`
+  amount: bigint
+  yesVotes: number
+  noVotes: number
+  claimType: number
+  status: number
+}
+
+const CLAIM_STATUS_LABELS = ['—', 'Voting open', 'Approved', 'Rejected', 'Withdrawn'] as const
+const CLAIM_TYPE_LABELS = ['Shared deduction', 'Individual deduction'] as const
 
 export default function AgreementDetail() {
   const params = useParams<{ chainId: string; contractAddress: string; agreementId: string }>()
@@ -109,25 +150,32 @@ export default function AgreementDetail() {
   })
 
   // Dual-provider Monad Testnet health. Writes are gated on NETWORK readiness
-  // only (both chains 10143, app RPC returns a block, contract visible through
-  // the app RPC). Optional injected-provider reads (nonce, wallet balance) are
-  // diagnostic and never gate. Identity (account) mismatch is handled
-  // separately by the AccountMismatchCard, not by this flag.
+  // only; identity (account) mismatch is handled by the AccountMismatchCard.
   const diagnostics = useWalletNetworkDiagnostics({ contractAddress })
   const networkReady = diagnostics.data?.networkReady ?? false
 
   const agreement = agreementRead.data as RawAgreement | undefined
 
-  // Stored application transactions + page-load cache repair. The direct
-  // contract reads above stay authoritative for everything actionable; when
-  // the DB status cache disagrees with them, the backend refreshes it from
-  // its own direct contract read.
+  // Stored application transactions + page-load cache repair. Direct reads
+  // stay authoritative; a disagreeing DB cache is refreshed by the backend
+  // from its own direct contract read.
   const cacheSync = useAgreementCacheSync({
     chainId: params.chainId,
     contractAddress,
     agreementId: params.agreementId,
     onchainStatusName: agreement ? (STATUS_NAMES[agreement.status] ?? 'NONE') : null,
     enabled: authStatus === 'authenticated',
+  })
+
+  // Claims are read one by one from the contract (IDs 1..claimCount).
+  const claimCount = agreement?.claimCount ?? 0
+  const claimsRead = useReadContracts({
+    contracts: Array.from({ length: claimCount }, (_, index) => ({
+      ...contract,
+      functionName: 'getClaim',
+      args: [agreementId, BigInt(index + 1)] as const,
+    })),
+    query: { enabled: claimCount > 0 },
   })
 
   const tenantRecords = useMemo(() => {
@@ -163,14 +211,24 @@ export default function AgreementDetail() {
     })
   }, [agreement, tenantRecords, address, authWallet])
 
-  if (agreementRead.isLoading) return <main className="page">Reading contract state…</main>
+  if (agreementRead.isLoading) {
+    return (
+      <main className="page">
+        <PageHeader title="Agreement" />
+        <LoadingSkeleton lines={5} label="Reading the contract" />
+      </main>
+    )
+  }
   if (agreementRead.isError || !agreement || !role) {
     return (
       <main className="page">
-        <div className="notice error">
-          Could not read this agreement from the contract. Check the RPC connection and the
-          address in the URL.
-        </div>
+        <ErrorState
+          title="Could not read this agreement"
+          retry={() => void agreementRead.refetch()}
+        >
+          The contract could not be read. Check your connection and the address in the URL —
+          nothing onchain is affected.
+        </ErrorState>
       </main>
     )
   }
@@ -181,6 +239,14 @@ export default function AgreementDetail() {
     (entry) => entry.record && entry.record.fundedAmount === entry.record.requiredAmount,
   ).length
   const me = role.connectedWallet
+
+  const roleLabel = role.isRecipient
+    ? 'Deposit recipient'
+    : role.isTenant && role.isCreator
+      ? 'Creator · tenant'
+      : role.isTenant
+        ? 'Tenant'
+        : 'Read-only'
 
   async function refetchAll() {
     await Promise.all([agreementRead.refetch(), tenantRecordsRead.refetch()])
@@ -227,28 +293,43 @@ export default function AgreementDetail() {
     networkHealthy: networkReady,
   }
 
+  const claims = (claimsRead.data ?? [])
+    .map((entry, index) => ({ id: index + 1, claim: entry.result as RawClaim | undefined }))
+    .filter((entry) => entry.claim !== undefined)
+
   return (
     <main className="page">
-      <h1>{metadata.data?.property_alias ?? `Agreement #${params.agreementId}`}</h1>
-      <p>
-        <span className={`badge ${statusName.toLowerCase()}`}>{statusName}</span>{' '}
-        <span className="muted small">
-          Agreement #{params.agreementId} ·{' '}
-          <a href={`${EXPLORER_ADDRESS}${contractAddress}`} target="_blank" rel="noreferrer" className="mono">
-            {shortAddress(contractAddress)} ↗
-          </a>
-        </span>
-      </p>
+      <PageHeader
+        title={metadata.data?.property_alias ?? `Agreement #${params.agreementId}`}
+        eyebrow="Shared deposit"
+        meta={
+          <>
+            <StatusBadge status={statusName} />
+            <span className="badge tone-accent">{roleLabel}</span>
+            <span className="muted small">
+              Agreement #{params.agreementId} ·{' '}
+              <a
+                href={`${EXPLORER_ADDRESS}${contractAddress}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mono"
+              >
+                {shortAddress(contractAddress)} ↗
+              </a>
+            </span>
+          </>
+        }
+      />
 
       {statusName === 'FUNDING' && role.fundingDeadlinePassed && (
         <div className="notice error">
-          The funding deadline for this agreement has passed. It can no longer be accepted
-          or funded and will not activate — it can only be cancelled, after which each
-          tenant withdraws its own contribution.
+          The funding deadline for this agreement has passed. It can no longer be accepted or
+          funded and will not activate — it can only be cancelled, after which each tenant
+          withdraws their own contribution.
         </div>
       )}
 
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" aria-label="Agreement sections">
         {TABS.map((name) => (
           <button
             key={name}
@@ -258,101 +339,115 @@ export default function AgreementDetail() {
             onClick={() => setTab(name)}
           >
             {name}
+            {name === 'Claims' && claimCount > 0 ? ` (${claimCount})` : ''}
           </button>
         ))}
       </div>
 
       {tab === 'Overview' && (
-        <div className="card">
-          <dl className="kv">
-            <dt>Status</dt><dd>{statusName}</dd>
-            <dt>Total funded</dt>
-            <dd className="amount">
-              {weiToMon(agreement.totalFunded)} / {weiToMon(agreement.totalRequired)} MON
-            </dd>
-            <dt>Tenant acceptance</dt><dd>{acceptedCount} of {agreement.tenantCount}</dd>
-            <dt>Tenants fully funded</dt><dd>{fundedCount} of {agreement.tenantCount}</dd>
-            <dt>Recipient accepted</dt><dd>{agreement.recipientAccepted ? 'Yes' : 'Not yet'}</dd>
-            <dt>Creator</dt><dd className="mono">{agreement.creator}</dd>
-            <dt>Recipient</dt><dd className="mono">{agreement.recipient}</dd>
-            <dt>Funding deadline</dt><dd>{formatTimestamp(agreement.fundingDeadline.toString())}</dd>
-            <dt>Lease</dt>
-            <dd>
-              {formatTimestamp(agreement.leaseStart.toString())} →{' '}
-              {formatTimestamp(agreement.leaseEnd.toString())}
-            </dd>
-            <dt>Claim deadline</dt><dd>{formatTimestamp(agreement.claimDeadline.toString())}</dd>
-            <dt>Settlement deadline</dt><dd>{formatTimestamp(agreement.settlementDeadline.toString())}</dd>
-            <dt>Chain</dt><dd>Monad Testnet ({monadTestnet.id})</dd>
-            {metadata.data?.creation_tx_hash && (
-              <>
-                <dt>Creation transaction</dt>
-                <dd>
-                  <a href={`${EXPLORER_TX}${metadata.data.creation_tx_hash}`} target="_blank" rel="noreferrer" className="mono">
-                    {shortAddress(metadata.data.creation_tx_hash)} ↗
-                  </a>
-                </dd>
-              </>
-            )}
-          </dl>
-          <div
-            className="progress-track"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Number(
-              agreement.totalRequired > 0n
-                ? (agreement.totalFunded * 100n) / agreement.totalRequired
-                : 0n,
-            )}
-            aria-label="Funding progress"
-            style={{ marginTop: '0.75rem' }}
-          >
-            <div
-              className="progress-fill"
-              style={{
-                width: `${Number(
-                  agreement.totalRequired > 0n
-                    ? (agreement.totalFunded * 100n) / agreement.totalRequired
-                    : 0n,
-                )}%`,
-              }}
+        <>
+          <div className="card">
+            <h2>Deposit</h2>
+            <AgreementProgress
+              fundedWei={agreement.totalFunded}
+              requiredWei={agreement.totalRequired}
+              acceptedCount={acceptedCount}
+              tenantCount={agreement.tenantCount}
             />
+            {statusName === 'ACTIVE' && (
+              <p className="notice success" style={{ marginBottom: 0 }}>
+                The deposit is fully funded and locked. No one — including the creator — can move
+                these funds outside the agreement's own rules.
+              </p>
+            )}
           </div>
-        </div>
+          <div className="grid-two">
+            <div className="card" style={{ marginBottom: 0 }}>
+              <h2>People</h2>
+              <dl className="kv">
+                <dt>Creator</dt>
+                <dd>
+                  <WalletAddress address={agreement.creator} />
+                </dd>
+                <dt>Deposit recipient</dt>
+                <dd>
+                  <WalletAddress address={agreement.recipient} />
+                </dd>
+                <dt>Recipient accepted</dt>
+                <dd>{agreement.recipientAccepted ? 'Yes' : 'Not yet'}</dd>
+                <dt>Tenants fully funded</dt>
+                <dd>
+                  {fundedCount} of {agreement.tenantCount}
+                </dd>
+              </dl>
+            </div>
+            <div className="card" style={{ marginBottom: 0 }}>
+              <h2>Key dates</h2>
+              <dl className="kv">
+                <dt>Funding deadline</dt>
+                <dd>
+                  <DeadlineDisplay seconds={agreement.fundingDeadline.toString()} />
+                </dd>
+                <dt>Lease</dt>
+                <dd>
+                  <DeadlineDisplay seconds={agreement.leaseStart.toString()} passedText="" /> →{' '}
+                  <DeadlineDisplay seconds={agreement.leaseEnd.toString()} passedText="" />
+                </dd>
+                <dt>Claims close</dt>
+                <dd>
+                  <DeadlineDisplay seconds={agreement.claimDeadline.toString()} />
+                </dd>
+                <dt>Settlement due</dt>
+                <dd>
+                  <DeadlineDisplay seconds={agreement.settlementDeadline.toString()} />
+                </dd>
+              </dl>
+            </div>
+          </div>
+        </>
       )}
 
       {tab === 'Participants & funding' && (
         <>
-          <div className="card">
-            <h2>Tenants</h2>
-            <table className="data">
-              <thead>
-                <tr><th>Wallet</th><th>Required</th><th>Funded</th><th>Remaining</th><th>Accepted</th></tr>
-              </thead>
-              <tbody>
-                {tenantRecords.map(({ wallet, record }) => (
-                  <tr key={wallet}>
-                    <td className="mono">
-                      {shortAddress(wallet)}
-                      {wallet.toLowerCase() === me ? ' (you)' : ''}
-                    </td>
-                    <td className="amount">{record ? weiToMon(record.requiredAmount) : '…'}</td>
-                    <td className="amount">{record ? weiToMon(record.fundedAmount) : '…'}</td>
-                    <td className="amount">
-                      {record ? weiToMon(record.requiredAmount - record.fundedAmount) : '…'}
-                    </td>
-                    <td>{record?.accepted ? '✓' : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="small muted">
-              Recipient {shortAddress(agreement.recipient)}:{' '}
-              {agreement.recipientAccepted ? 'accepted ✓' : 'not accepted yet'} (recipients do not
-              fund the escrow)
-            </p>
-          </div>
+          <section className="card" aria-labelledby="tenants-heading">
+            <h2 id="tenants-heading">Tenants</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {tenantRecords.map(({ wallet, record }) => (
+                <ParticipantCard
+                  key={wallet}
+                  address={wallet}
+                  roleLabel={
+                    wallet.toLowerCase() === agreement.creator.toLowerCase()
+                      ? 'Creator · tenant'
+                      : 'Tenant'
+                  }
+                  isYou={wallet.toLowerCase() === me}
+                  accepted={record?.accepted}
+                  facts={
+                    record
+                      ? [
+                          { label: 'Required', value: <AmountDisplay wei={record.requiredAmount} /> },
+                          { label: 'Funded', value: <AmountDisplay wei={record.fundedAmount} /> },
+                          {
+                            label: 'Remaining',
+                            value: (
+                              <AmountDisplay wei={record.requiredAmount - record.fundedAmount} />
+                            ),
+                          },
+                        ]
+                      : []
+                  }
+                />
+              ))}
+              <ParticipantCard
+                address={agreement.recipient}
+                roleLabel="Deposit recipient"
+                isYou={agreement.recipient.toLowerCase() === me}
+                accepted={agreement.recipientAccepted}
+                facts={[{ label: 'Contribution', value: 'No contribution required' }]}
+              />
+            </div>
+          </section>
 
           {(authStatus === 'authenticated' || accountMismatch) &&
             statusName === 'FUNDING' &&
@@ -372,14 +467,14 @@ export default function AgreementDetail() {
           ) : statusName === 'ACTIVE' ? (
             <div className="notice success">
               All acceptances and contributions are complete — the deposit is locked and the
-              agreement is ACTIVE.
+              agreement is active.
             </div>
           ) : statusName === 'FUNDING' ? (
             <>
               <WalletMismatchNotice role={role} />
               {role.isParticipant && !networkReady && (
                 <div className="notice warn">
-                  Actions are disabled until <strong>Network ready</strong> shows{' '}
+                  Actions are paused until <strong>Network ready</strong> shows{' '}
                   <strong>Yes</strong> above. Use Recheck / Switch to Monad Testnet.
                 </div>
               )}
@@ -389,9 +484,8 @@ export default function AgreementDetail() {
                   {role.isCreator && (
                     <div className="notice">
                       You created this agreement <strong>and</strong> you are one of its tenants.
-                      Creating it gave you no special power over the funds — you still accept and
-                      fund your own contribution like any tenant, and you cannot move anyone
-                      else's money.
+                      Creating it gave you no special power over the funds — you accept and fund
+                      your own share like any tenant, and you cannot move anyone else's money.
                     </div>
                   )}
                   <TenantAcceptanceCard {...commonProps} />
@@ -402,17 +496,166 @@ export default function AgreementDetail() {
               <ReadOnlyParticipantCard role={role} />
             </>
           ) : (
-            <div className="notice">This agreement is {statusName.toLowerCase()}.</div>
+            <div className="notice">
+              This agreement is {describeAgreementStatus(statusName).toLowerCase()}.
+            </div>
           )}
         </>
       )}
 
-      {tab === 'Activity' && (
-        <div className="card">
-          <h2>Activity</h2>
+      {tab === 'Claims' && (
+        <section className="card" aria-labelledby="claims-heading">
+          <h2 id="claims-heading">Claims</h2>
           <p className="muted small">
-            Verified application transactions stored for this agreement. Current status and
-            balances above always come from direct contract reads.
+            After the lease, the deposit recipient can claim deductions from the deposit; tenants
+            vote under a strict-majority rule ({agreement.requiredApprovals} approvals needed).
+            Everything below is read directly from the contract.
+          </p>
+          {claimCount === 0 ? (
+            <EmptyState title="No claims yet">
+              {statusName === 'FUNDING'
+                ? 'Claims become possible only after the deposit is fully funded and locked.'
+                : statusName === 'ACTIVE'
+                  ? 'No deductions have been claimed against this deposit.'
+                  : 'This agreement finished with no claims.'}
+            </EmptyState>
+          ) : claimsRead.isLoading ? (
+            <LoadingSkeleton lines={3} label="Reading claims" />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {claims.map(({ id, claim }) => (
+                <div className="card tinted" key={id} style={{ marginBottom: 0 }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <strong>Claim #{id}</strong>
+                    <span className="badge">{CLAIM_TYPE_LABELS[claim!.claimType] ?? 'Claim'}</span>
+                    <span
+                      className={`badge ${
+                        claim!.status === 2
+                          ? 'tone-danger'
+                          : claim!.status === 3
+                            ? 'tone-success'
+                            : ''
+                      }`}
+                    >
+                      {CLAIM_STATUS_LABELS[claim!.status] ?? '—'}
+                    </span>
+                    <AmountDisplay wei={claim!.amount} />
+                  </div>
+                  <dl className="kv small">
+                    {claim!.claimType === 1 && (
+                      <>
+                        <dt>Liable tenant</dt>
+                        <dd>
+                          <WalletAddress address={claim!.liableTenant} />
+                        </dd>
+                      </>
+                    )}
+                    <dt>Votes</dt>
+                    <dd>
+                      {claim!.yesVotes} approve · {claim!.noVotes} reject
+                    </dd>
+                  </dl>
+                  <ProofRow label="Reason hash" value={claim!.reasonHash} />
+                  <ProofRow label="Evidence hash" value={claim!.evidenceHash} />
+                </div>
+              ))}
+              <p className="muted small">
+                Submitting and voting on claims from this app arrives in a later release. Claim
+                data shown here is live contract state.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'Settlement' && (
+        <section className="card" aria-labelledby="settlement-heading">
+          <h2 id="settlement-heading">Settlement & withdrawals</h2>
+          {statusName === 'FUNDING' && (
+            <EmptyState title="Not settled yet">
+              Settlement happens after the deposit is locked, the lease ends, and all claims are
+              resolved. Nothing to settle while deposits are still being collected.
+            </EmptyState>
+          )}
+          {statusName === 'ACTIVE' && (
+            <>
+              <p>
+                The deposit of <AmountDisplay wei={agreement.totalFunded} /> is locked. After the
+                lease ends (
+                <DeadlineDisplay seconds={agreement.leaseEnd.toString()} passedText="ended" />
+                ) and all claims are resolved, the contract itself computes exact refunds and
+                approved deductions — no administrator is involved.
+              </p>
+              <dl className="kv">
+                <dt>Unresolved claims</dt>
+                <dd>{agreement.unresolvedClaimCount}</dd>
+                <dt>Settlement due</dt>
+                <dd>
+                  <DeadlineDisplay seconds={agreement.settlementDeadline.toString()} />
+                </dd>
+              </dl>
+              <p className="muted small">
+                Finalization and withdrawals from this app arrive in a later release; the
+                contract already enforces all of it onchain.
+              </p>
+            </>
+          )}
+          {statusName === 'FINALIZED' && (
+            <>
+              <p>The contract has computed the final split.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {tenantRecords.map(({ wallet, record }) => (
+                  <ParticipantCard
+                    key={wallet}
+                    address={wallet}
+                    roleLabel="Tenant"
+                    isYou={wallet.toLowerCase() === me}
+                    facts={
+                      record
+                        ? [
+                            { label: 'Refund', value: <AmountDisplay wei={record.refundAmount} /> },
+                            {
+                              label: 'Withdrawn',
+                              value: record.refundWithdrawn ? 'Yes' : 'Not yet',
+                            },
+                          ]
+                        : []
+                    }
+                  />
+                ))}
+                <ParticipantCard
+                  address={agreement.recipient}
+                  roleLabel="Deposit recipient"
+                  isYou={agreement.recipient.toLowerCase() === me}
+                  facts={[
+                    {
+                      label: 'Payout withdrawn',
+                      value: agreement.recipientPayoutWithdrawn ? 'Yes' : 'Not yet',
+                    },
+                  ]}
+                />
+              </div>
+              <p className="muted small">
+                Withdrawal buttons arrive in a later release; amounts above are live contract
+                state.
+              </p>
+            </>
+          )}
+          {statusName === 'CANCELLED' && (
+            <p>
+              Funding was cancelled. Each tenant can reclaim exactly what they contributed;
+              nothing is paid to the deposit recipient.
+            </p>
+          )}
+        </section>
+      )}
+
+      {tab === 'Activity' && (
+        <section className="card" aria-labelledby="activity-heading">
+          <h2 id="activity-heading">Activity</h2>
+          <p className="muted small">
+            Verified transactions made through this application. Current status and balances
+            always come from direct contract reads.
           </p>
           <AgreementActivity
             transactions={cacheSync.transactions}
@@ -420,32 +663,45 @@ export default function AgreementDetail() {
             isError={cacheSync.isError}
             authenticated={authStatus === 'authenticated'}
           />
-        </div>
+        </section>
       )}
 
       {tab === 'Terms & proof' && (
-        <div className="card">
-          <h2>Terms & proof</h2>
-          <dl className="kv">
-            <dt>Onchain terms hash</dt>
-            <dd className="mono">{agreement.termsHash}</dd>
-          </dl>
+        <section className="card" aria-labelledby="proof-heading">
+          <h2 id="proof-heading">Terms & proof</h2>
+          <p className="muted small">
+            The contract stores only the fingerprint (hash) of the agreed terms. Anyone can
+            recompute it from the readable terms below and compare.
+          </p>
+          <ProofRow label="Terms hash (onchain)" value={agreement.termsHash} />
+          <ProofRow label="Escrow contract" value={contractAddress} />
+          {metadata.data?.creation_tx_hash && (
+            <div className="proof-row">
+              <span className="proof-label">Creation transaction</span>
+              <span className="proof-value mono">
+                <a
+                  href={`${EXPLORER_TX}${metadata.data.creation_tx_hash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {metadata.data.creation_tx_hash} ↗
+                </a>
+              </span>
+            </div>
+          )}
           {metadata.data?.terms_json ? (
-            <>
-              <p className="muted small">
-                Canonical terms accepted by every participant (private copy; its Keccak-256 hash
-                is the value stored onchain above):
-              </p>
+            <details style={{ marginTop: '0.75rem' }}>
+              <summary style={{ cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                Show the full readable terms (private to participants)
+              </summary>
               <pre className="mono small" style={{ overflowX: 'auto' }}>
                 {JSON.stringify(metadata.data.terms_json, null, 2)}
               </pre>
-            </>
+            </details>
           ) : (
-            <p className="muted small">
-              Sign in as a participant to view the private readable terms.
-            </p>
+            <p className="muted small">Sign in as a participant to view the readable terms.</p>
           )}
-        </div>
+        </section>
       )}
     </main>
   )

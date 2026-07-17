@@ -8,10 +8,18 @@ import { useAccount, useChainId } from 'wagmi'
 import { api, ApiError } from '../lib/api'
 import { termsHash } from '../lib/canonical'
 import { monadTestnet } from '../lib/chain'
-import { weiToMon, shortAddress, formatTimestamp } from '../lib/format'
+import { shortAddress, formatTimestamp } from '../lib/format'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
 import { useAuth } from '../app/AuthContext'
 import { useContractTx } from '../hooks/useContractTx'
+import {
+  AmountDisplay,
+  ErrorState,
+  LoadingSkeleton,
+  PageHeader,
+  ProofRow,
+  WalletAddress,
+} from '../components/ui'
 
 interface Draft {
   id: string
@@ -99,13 +107,20 @@ export default function DraftDetail() {
       </main>
     )
   }
-  if (draft.isLoading) return <main className="page">Loading draft…</main>
+  if (draft.isLoading) {
+    return (
+      <main className="page">
+        <PageHeader title="Draft" />
+        <LoadingSkeleton lines={4} label="Loading draft" />
+      </main>
+    )
+  }
   if (draft.isError || !draft.data) {
     return (
       <main className="page">
-        <div className="notice error">
-          {draft.error instanceof ApiError ? draft.error.message : 'draft unavailable'}
-        </div>
+        <ErrorState title="Draft unavailable">
+          {draft.error instanceof ApiError ? draft.error.message : 'This draft could not be loaded.'}
+        </ErrorState>
       </main>
     )
   }
@@ -153,12 +168,15 @@ export default function DraftDetail() {
 
   return (
     <main className="page">
-      <h1>{data.property_alias}</h1>
-      <p>
-        <span className={`badge ${data.status === 'CONFIRMED' ? 'active' : 'funding'}`}>
-          {data.status === 'CONFIRMED' ? 'Onchain' : 'Draft — not onchain yet'}
-        </span>
-      </p>
+      <PageHeader
+        title={data.property_alias}
+        eyebrow="Agreement draft"
+        meta={
+          <span className={`badge ${data.status === 'CONFIRMED' ? 'active' : 'funding'}`}>
+            {data.status === 'CONFIRMED' ? 'Onchain' : 'Draft — not onchain yet'}
+          </span>
+        }
+      />
 
       <div className="card">
         <h2>Participants</h2>
@@ -169,15 +187,15 @@ export default function DraftDetail() {
           <tbody>
             {data.tenants.map((tenant) => (
               <tr key={tenant.wallet}>
-                <td>{tenant.wallet === data.creator ? 'Tenant (creator)' : 'Tenant'}</td>
-                <td className="mono">{tenant.wallet}</td>
-                <td className="amount">{weiToMon(tenant.required_amount_wei)} MON</td>
+                <td>{tenant.wallet === data.creator ? 'Creator · tenant' : 'Tenant'}</td>
+                <td><WalletAddress address={tenant.wallet} /></td>
+                <td><AmountDisplay wei={tenant.required_amount_wei} /></td>
               </tr>
             ))}
             <tr>
               <td>Deposit recipient</td>
-              <td className="mono">{data.recipient}</td>
-              <td className="muted">—</td>
+              <td><WalletAddress address={data.recipient} /></td>
+              <td className="muted">No contribution required</td>
             </tr>
           </tbody>
         </table>
@@ -196,12 +214,12 @@ export default function DraftDetail() {
         <div className="card">
           <h2>Create onchain</h2>
           <p className="muted small">
-            Step 1 asks the backend for the exact canonical terms; the browser then recomputes
-            the Keccak-256 hash independently. Creation stays disabled unless both hashes match
-            byte-for-byte.
+            Before anything goes onchain, your browser independently recomputes the terms
+            fingerprint and compares it with the server's. Creation stays disabled unless both
+            match byte-for-byte — so what you sign is exactly what was agreed.
           </p>
           <button className="secondary" onClick={() => prepare.mutate()} disabled={prepare.isPending}>
-            {prepare.isPending ? 'Preparing…' : 'Prepare & compare hashes'}
+            {prepare.isPending ? 'Checking…' : 'Run the terms check'}
           </button>
           {prepare.isError && (
             <div className="notice error">
@@ -209,19 +227,18 @@ export default function DraftDetail() {
             </div>
           )}
           {prepared && (
-            <dl className="kv small" style={{ marginTop: '0.75rem' }}>
-              <dt>Backend hash</dt><dd className="mono">{prepared.termsHash}</dd>
-              <dt>Browser hash</dt><dd className="mono">{frontendHash}</dd>
-              <dt>Match</dt>
-              <dd>
+            <div style={{ marginTop: '0.75rem' }}>
+              <ProofRow label="Server fingerprint" value={prepared.termsHash} />
+              <ProofRow label="Your browser's fingerprint" value={frontendHash ?? ''} />
+              <ProofRow label="Escrow contract" value={prepared.contractAddress} />
+              <p>
                 {hashesMatch ? (
-                  <span className="badge active">hashes match</span>
+                  <span className="badge tone-success">Fingerprints match ✓</span>
                 ) : (
-                  <span className="badge reverted">MISMATCH — do not proceed</span>
+                  <span className="badge tone-danger">Mismatch — do not proceed</span>
                 )}
-              </dd>
-              <dt>Contract</dt><dd className="mono">{prepared.contractAddress}</dd>
-            </dl>
+              </p>
+            </div>
           )}
           {prepared && !isConnected && <div className="notice warn">Connect your wallet to continue.</div>}
           {prepared && isConnected && chainId !== monadTestnet.id && (

@@ -13,6 +13,7 @@ import { useContractTx } from '../hooks/useContractTx'
 import { useAuth } from '../app/AuthContext'
 import { makeActionKey, useTx } from '../app/TxContext'
 import { sharedDepositEscrowAbi } from '../generated/sharedDepositEscrow'
+import { AmountDisplay, FormField } from './ui'
 
 interface Common {
   role: AgreementRole
@@ -81,12 +82,14 @@ export function AccountMismatchCard({
         new signature will be requested for the connected wallet — no need to clear cookies or
         storage.
       </p>
-      <button className="primary" disabled={signing} onClick={() => void signIn()}>
-        {signing ? 'Signing in…' : 'Sign in as connected wallet'}
-      </button>{' '}
-      <button className="secondary" disabled={signing} onClick={() => disconnect()}>
-        Reconnect previous wallet
-      </button>
+      <div className="button-row">
+        <button className="primary" disabled={signing} onClick={() => void signIn()}>
+          {signing ? 'Signing in…' : 'Sign in as connected wallet'}
+        </button>
+        <button className="secondary" disabled={signing} onClick={() => disconnect()}>
+          Reconnect previous wallet
+        </button>
+      </div>
       {error && <div className="notice error">{error}</div>}
     </div>
   )
@@ -262,9 +265,9 @@ export function TenantFundingCard(props: Common) {
     <div className="card">
       <h2>Fund your contribution</h2>
       <dl className="kv small">
-        <dt>Required</dt><dd className="amount">{weiToMon(tenant.requiredAmount)} MON</dd>
-        <dt>Funded</dt><dd className="amount">{weiToMon(tenant.fundedAmount)} MON</dd>
-        <dt>Remaining</dt><dd className="amount">{weiToMon(role.remaining)} MON</dd>
+        <dt>Required</dt><dd><AmountDisplay wei={tenant.requiredAmount} /></dd>
+        <dt>Funded</dt><dd><AmountDisplay wei={tenant.fundedAmount} /></dd>
+        <dt>Remaining</dt><dd><AmountDisplay wei={role.remaining} /></dd>
       </dl>
       {role.remaining === 0n ? (
         <div className="notice success">Your contribution is fully funded.</div>
@@ -274,28 +277,37 @@ export function TenantFundingCard(props: Common) {
         </div>
       ) : (
         <>
-          <p className="muted small">Partial deposits are allowed, up to your remaining amount.</p>
-          <label className="field">
-            <span className="name">Amount (MON)</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
-          </label>
-          <button
-            className="primary"
-            disabled={!role.canDeposit || locked || !props.networkHealthy}
-            onClick={() => void deposit()}
+          <FormField
+            label="Amount (MON)"
+            hint="Partial deposits are allowed, up to your remaining contribution."
+            error={error}
           >
-            Deposit
-          </button>{' '}
-          <button
-            className="secondary"
-            disabled={!role.canDeposit || locked || !props.networkHealthy}
-            onClick={() => setAmount(weiToMon(role.remaining))}
-          >
-            Fill remaining
-          </button>
+            <input
+              inputMode="decimal"
+              value={amount}
+              aria-invalid={error ? true : undefined}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.0"
+            />
+          </FormField>
+          <div className="button-row">
+            <button
+              className="primary"
+              disabled={!role.canDeposit || locked || !props.networkHealthy}
+              onClick={() => void deposit()}
+            >
+              Deposit
+            </button>
+            <button
+              className="secondary"
+              disabled={!role.canDeposit || locked || !props.networkHealthy}
+              onClick={() => setAmount(weiToMon(role.remaining))}
+            >
+              Fill remaining
+            </button>
+          </div>
         </>
       )}
-      {error && <div className="notice error">{error}</div>}
     </div>
   )
 }
@@ -347,10 +359,15 @@ export function TenantWithdrawCard(props: Common) {
         Withdrawing your own funding keeps the agreement from activating until you
         deposit it again. You can only ever withdraw your own contribution.
       </p>
-      <label className="field">
-        <span className="name">Amount (MON)</span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" />
-      </label>
+      <FormField label="Amount (MON)" error={error}>
+        <input
+          inputMode="decimal"
+          value={amount}
+          aria-invalid={error ? true : undefined}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0.0"
+        />
+      </FormField>
       <button
         className="secondary"
         disabled={!role.canWithdrawFunding || locked || !props.networkHealthy}
@@ -358,7 +375,6 @@ export function TenantWithdrawCard(props: Common) {
       >
         Withdraw
       </button>
-      {error && <div className="notice error">{error}</div>}
     </div>
   )
 }
