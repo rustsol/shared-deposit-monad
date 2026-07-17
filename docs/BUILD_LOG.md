@@ -301,3 +301,24 @@ ruff/format/mypy strict clean (54 files); backend **162 passed**; frontend **20 
 ### Deviation
 
 Option B (owner's explicit choice): CLI deployment from the gitignored key replaced the browser-wallet deployment page; `/developer/deploy` and the deployment-confirmation API were therefore not built. Manual Monad Testnet browser QA (create → invite → claim → accept → fund → ACTIVE) is performed with the owner's wallets following this commit.
+
+## 2026-07-17 — Transaction persistence replaces the planned event indexer
+
+Product decision (final): the MVP does not use a blockchain event indexer. The
+application initiates every contract transaction through the frontend, so each
+wallet-returned hash is persisted to MySQL (`contract_transactions`), verified
+by receipt, and followed by a DIRECT contract-state refresh of
+`agreement_index.status_cache`. The contract remains the only financial
+authority; the cache is repaired on page load through a participant-gated
+refresh endpoint whenever it disagrees with the direct read.
+
+Agreement #2's eight audited transactions (create, 3× accept-as-tenant, 3×
+deposit, accept-as-recipient) were registered once via
+`python -m app.cli.register_transactions` from their known hashes — fetched by
+hash, receipt-verified, senders taken from the chain — bringing the cache to
+ACTIVE without any log scanning.
+
+**Documented MVP limitation**: transactions made OUTSIDE this application
+update current agreement state through direct contract reads (and the cache
+refresh that follows), but they do not appear automatically in the stored
+application activity timeline. This is acceptable for the MVP.

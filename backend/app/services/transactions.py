@@ -268,6 +268,59 @@ def verify_transaction(
     return row
 
 
+def register_known_transaction(
+    db: Session,
+    settings: Settings,
+    chain: TxChainReader,
+    verified_contract: str,
+    tx_hash: str,
+) -> ContractTransaction:
+    """Operator path for KNOWN transaction hashes (e.g. the audited
+    agreement #2 history): the wallet is taken from the onchain sender —
+    never guessed — and the row goes through the exact same verification as
+    a user-recorded transaction. Idempotent per (chain, hash); the caller
+    commits."""
+    tx_hash = tx_hash.lower()
+    existing = (
+        db.query(ContractTransaction)
+        .filter(
+            ContractTransaction.chain_id == settings.chain_id,
+            ContractTransaction.tx_hash == tx_hash,
+        )
+        .one_or_none()
+    )
+    if existing is not None:
+        return verify_transaction(db, settings, chain, existing)
+
+    facts = chain.get_transaction_facts(tx_hash)
+    if facts is None:
+        raise TxError(404, f"transaction {tx_hash} is not known to the network")
+    if str(facts.get("to") or "").lower() != verified_contract.lower():
+        raise TxError(409, f"transaction {tx_hash} does not target the verified contract")
+    call = decode_function_input(str(facts.get("input", "0x")))
+    if call is None or call.function_name not in ALLOWED_FUNCTIONS:
+        raise TxError(422, f"transaction {tx_hash} is not a recognized contract call")
+
+    now = _utcnow()
+    row = ContractTransaction(
+        chain_id=settings.chain_id,
+        contract_address=verified_contract.lower(),
+        agreement_id=Decimal(call.agreement_id) if call.agreement_id is not None else None,
+        claim_id=Decimal(call.claim_id) if call.claim_id is not None else None,
+        wallet_address=str(facts["from"]).lower(),
+        function_name=call.function_name,
+        tx_hash=tx_hash,
+        value_wei=Decimal(str(facts.get("value", "0"))),
+        status=TX_STATUS_SUBMITTED,
+        submitted_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    db.flush()
+    return verify_transaction(db, settings, chain, row)
+
+
 def refresh_agreement_cache(
     db: Session,
     settings: Settings,
