@@ -61,9 +61,7 @@ def upgrade() -> None:
         "contract_transactions",
         ["wallet_address"],
     )
-    op.create_index(
-        op.f("ix_contract_transactions_status"), "contract_transactions", ["status"]
-    )
+    op.create_index(op.f("ix_contract_transactions_status"), "contract_transactions", ["status"])
 
 
 def downgrade() -> None:
@@ -71,7 +69,5 @@ def downgrade() -> None:
     op.drop_index(
         op.f("ix_contract_transactions_wallet_address"), table_name="contract_transactions"
     )
-    op.drop_index(
-        op.f("ix_contract_transactions_agreement_id"), table_name="contract_transactions"
-    )
+    op.drop_index(op.f("ix_contract_transactions_agreement_id"), table_name="contract_transactions")
     op.drop_table("contract_transactions")

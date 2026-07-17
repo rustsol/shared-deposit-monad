@@ -283,9 +283,7 @@ def refresh_agreement_cache_endpoint(
     )
     before = index.status_cache
     try:
-        onchain = refresh_agreement_cache(
-            db, settings, _chain(), contract_address, agreement_id
-        )
+        onchain = refresh_agreement_cache(db, settings, _chain(), contract_address, agreement_id)
     except Exception:  # noqa: BLE001 - RPC unavailable: keep cache, report clearly
         raise HTTPException(502, "direct contract read failed; cache left unchanged") from None
     db.commit()

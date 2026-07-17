@@ -185,10 +185,7 @@ def test_agreement_transactions_are_participant_gated(
     assert body["transactions"][0]["explorer_tx_url"].endswith(TX_ACCEPT_CREATOR)
 
     login(client, WALLET_C)  # not a participant
-    assert (
-        client.get(f"/api/v1/agreements/{CHAIN_ID}/{CONTRACT}/2/transactions").status_code
-        == 404
-    )
+    assert client.get(f"/api/v1/agreements/{CHAIN_ID}/{CONTRACT}/2/transactions").status_code == 404
 
 
 def test_refresh_cache_updates_stale_status_from_direct_read(

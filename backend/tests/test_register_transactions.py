@@ -93,7 +93,5 @@ def test_register_rejects_foreign_and_unknown_hashes(db_session: Session) -> Non
     # A real transaction that targets a different contract must be refused.
     other_contract = "0x" + "12" * 20
     with pytest.raises(TxError):
-        register_known_transaction(
-            db_session, settings, chain, other_contract, fixture_hashes()[0]
-        )
+        register_known_transaction(db_session, settings, chain, other_contract, fixture_hashes()[0])
     assert db_session.query(ContractTransaction).count() == 0

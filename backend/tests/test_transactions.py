@@ -28,9 +28,7 @@ from app.services.transactions import (
 )
 from tests.conftest import make_test_settings
 
-FIXTURE_PATH = os.path.join(
-    os.path.dirname(__file__), "fixtures", "agreement2_transactions.json"
-)
+FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "agreement2_transactions.json")
 
 CHAIN_ID = 10143
 CONTRACT = "0x5720c3f77c66527b59f9f63cd3631a3019400910"
@@ -208,9 +206,7 @@ def test_duplicate_hash_is_idempotent_for_same_wallet(
     assert count == 1
 
 
-def test_duplicate_hash_from_other_wallet_is_rejected(
-    db_session: Session, settings: Any
-) -> None:
+def test_duplicate_hash_from_other_wallet_is_rejected(db_session: Session, settings: Any) -> None:
     record_submitted(
         db_session, settings, CONTRACT, CREATOR, submission(TX_ACCEPT_CREATOR, "acceptAsTenant")
     )
@@ -226,9 +222,7 @@ def test_duplicate_hash_from_other_wallet_is_rejected(
     assert error.value.status_code == 409
 
 
-def test_wrong_chain_contract_and_function_are_rejected(
-    db_session: Session, settings: Any
-) -> None:
+def test_wrong_chain_contract_and_function_are_rejected(db_session: Session, settings: Any) -> None:
     bad_chain = TxSubmission(
         chain_id=1,
         contract_address=CONTRACT,
