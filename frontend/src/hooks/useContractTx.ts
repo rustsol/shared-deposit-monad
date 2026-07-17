@@ -15,6 +15,7 @@ import { getConnectorClient, getPublicClient, simulateContract } from 'wagmi/act
 import { BaseError, ContractFunctionRevertedError, type EIP1193Provider, type TransactionReceipt } from 'viem'
 import { monadTestnet, wagmiConfig } from '../lib/chain'
 import { classifyPropagation } from '../lib/diagnostics'
+import { recordTransaction, reverifyTransaction } from '../lib/txPersistence'
 import { useTx } from '../app/TxContext'
 
 // Is the transaction observable through a given provider yet?
@@ -193,6 +194,9 @@ export function useContractTx() {
       result: Classification,
       verify?: (hash: `0x${string}`) => Promise<boolean>,
     ): Promise<boolean> => {
+      // Let the backend record the receipt outcome and refresh the agreement
+      // cache from a direct contract read (idempotent, best-effort).
+      void reverifyTransaction(chainId, hash)
       switch (result.kind) {
         case 'mined_reverted':
           update(id, { status: 'MINED_REVERTED', hash, error: 'transaction reverted onchain' })
@@ -246,7 +250,7 @@ export function useContractTx() {
         }
       }
     },
-    [update],
+    [update, chainId],
   )
 
   const send = useCallback(
@@ -317,6 +321,16 @@ export function useContractTx() {
       // A returned hash is only a REQUEST. Prove propagation through both the
       // official RPC and the injected wallet provider before showing pending.
       update(id, { status: 'BROADCAST_REQUESTED', hash })
+      // Persist immediately: MySQL is the durable record of this action;
+      // sessionStorage is only same-tab recovery. Best-effort by design.
+      void recordTransaction({
+        chainId,
+        contractAddress: request.address,
+        txHash: hash,
+        functionName: request.functionName,
+        agreementId: request.agreementId,
+        valueWei: (request.value ?? 0n).toString(),
+      })
       const propagation = await confirmPropagation(hash)
       if (propagation === 'BROADCAST_FAILED_NOT_PROPAGATED') {
         update(id, {
