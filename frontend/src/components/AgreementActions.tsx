@@ -1,5 +1,5 @@
 // Explicit, role-specific action components. Each renders only for its role,
-// with permissions taken from the shared role resolver — no generic card that
+// with permissions taken from the shared role resolver - no generic card that
 // morphs labels between tenant and recipient. Every write uses useContractTx
 // and only reports VERIFIED after a direct contract-state re-read confirms the
 // change.
@@ -46,7 +46,7 @@ function actionKeyFor(props: Common, functionName: string): string {
 
 /**
  * Shown when a session exists but a DIFFERENT wallet is connected. This is an
- * account change, not a network fault — so it replaces every participant action
+ * account change, not a network fault - so it replaces every participant action
  * card until the connected wallet re-authenticates and the role is recomputed.
  */
 export function AccountMismatchCard({
@@ -79,7 +79,7 @@ export function AccountMismatchCard({
       </p>
       <p className="muted small">
         Sign in with the connected wallet to continue. Your previous session will be revoked and a
-        new signature will be requested for the connected wallet — no need to clear cookies or
+        new signature will be requested for the connected wallet - no need to clear cookies or
         storage.
       </p>
       <div className="button-row">
@@ -118,7 +118,7 @@ export function RecipientAcceptanceCard(props: Common) {
     <div className="card">
       <h2>Your role: deposit recipient</h2>
       <p className="muted">
-        Tenants fund the escrow. <strong>The deposit recipient does not deposit funds</strong> —
+        Tenants fund the escrow. <strong>The deposit recipient does not deposit funds</strong> -
         there is no contribution required from you.
       </p>
       <dl className="kv">
@@ -159,7 +159,7 @@ export function RecipientAcceptanceCard(props: Common) {
           </button>
           {locked && (
             <p className="muted small">
-              An acceptance attempt is already in progress — see the transaction drawer. This
+              An acceptance attempt is already in progress - see the transaction drawer. This
               button stays disabled until it resolves.
             </p>
           )}
@@ -273,7 +273,7 @@ export function TenantFundingCard(props: Common) {
         <div className="notice success">Your contribution is fully funded.</div>
       ) : role.fundingDeadlinePassed ? (
         <div className="notice warn">
-          The funding deadline has passed — no further deposits are accepted.
+          The funding deadline has passed - no further deposits are accepted.
         </div>
       ) : (
         <>

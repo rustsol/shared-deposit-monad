@@ -1,8 +1,8 @@
-"""AUTOMATED LOCAL INTEGRATION TEST — local Hardhat node only.
+"""AUTOMATED LOCAL INTEGRATION TEST - local Hardhat node only.
 
 Runs the full lifecycle (deploy → create → accept → fund → ACTIVE) against a
 LOCAL Hardhat test node through the real backend ChainService and the real
-compiled artifact. Local accounts are Hardhat's well-known developer keys —
+compiled artifact. Local accounts are Hardhat's well-known developer keys -
 they exist on every Hardhat node, hold no real value, and are NEVER the Monad
 Testnet deployment. Nothing here contacts Monad, and nothing from this test
 may be presented as testnet activity.

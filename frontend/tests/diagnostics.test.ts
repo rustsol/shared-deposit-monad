@@ -1,5 +1,5 @@
 // Dual-provider Monad Testnet health + broadcast-propagation logic. These are
-// pure evaluators — no wallet, no RPC — so every branch is exercised directly.
+// pure evaluators - no wallet, no RPC - so every branch is exercised directly.
 //
 // Network readiness and identity are INDEPENDENT. Optional injected-provider
 // reads (nonce, wallet balance, wallet-side block/code) must never block a
@@ -38,7 +38,7 @@ function healthyReading(overrides: Partial<ProviderReadings> = {}): ProviderRead
 
 const baseOpts = { connectedWallet: WALLET, authWallet: WALLET }
 
-describe('evaluateHealth — network readiness requires only genuinely necessary facts', () => {
+describe('evaluateHealth - network readiness requires only genuinely necessary facts', () => {
   test('ready when both chains are 10143, the app RPC has a block, and the contract is visible', () => {
     const d = evaluateHealth(healthyReading(), healthyReading(), baseOpts)
     expect(d.networkReady).toBe(true)
@@ -75,7 +75,7 @@ describe('evaluateHealth — network readiness requires only genuinely necessary
   })
 })
 
-describe('evaluateHealth — optional injected-provider reads NEVER block', () => {
+describe('evaluateHealth - optional injected-provider reads NEVER block', () => {
   test('wallet-provider nonce unavailable does not block a valid write', () => {
     const d = evaluateHealth(
       healthyReading({ latestNonce: null, pendingNonce: null }),
@@ -126,7 +126,7 @@ describe('evaluateHealth — optional injected-provider reads NEVER block', () =
   })
 })
 
-describe('evaluateHealth — identity is separate from the network', () => {
+describe('evaluateHealth - identity is separate from the network', () => {
   test('session mismatch does NOT make the network unready and is not an RPC failure', () => {
     const d = evaluateHealth(healthyReading(), healthyReading(), {
       connectedWallet: WALLET,
@@ -202,7 +202,7 @@ describe('the exact reported bug: recipient connected, tenant session, provider 
   })
 })
 
-describe('classifyPropagation — a returned hash is only a REQUEST', () => {
+describe('classifyPropagation - a returned hash is only a REQUEST', () => {
   const windowMs = 15_000
   const extendedMs = 30_000
 

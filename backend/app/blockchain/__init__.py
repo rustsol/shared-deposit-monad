@@ -2,7 +2,7 @@
 
 This package never signs or broadcasts transactions and never holds key
 material. It is the application's source of financial truth: every balance,
-acceptance flag, and status shown to users is read from the contract here —
+acceptance flag, and status shown to users is read from the contract here -
 MySQL supplies only private metadata and caches.
 """
 

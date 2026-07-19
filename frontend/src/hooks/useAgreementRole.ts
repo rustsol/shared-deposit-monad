@@ -1,6 +1,6 @@
 // Single source of truth for a wallet's role and permitted actions on an
 // agreement. Everything is derived from DIRECT contract state plus the
-// authenticated session — never from the route, invitation/draft metadata,
+// authenticated session - never from the route, invitation/draft metadata,
 // dashboard cache, localStorage, or stale React state.
 //
 // Hard rule: no action is enabled unless the connected wallet EXACTLY matches

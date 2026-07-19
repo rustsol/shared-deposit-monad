@@ -213,14 +213,14 @@ export function useContractTx() {
             status: 'NOT_FOUND',
             hash,
             error:
-              'the wallet returned a hash but the network never received the transaction. This usually means the wallet is on a broken Monad RPC — set it to https://testnet-rpc.monad.xyz, then try again.',
+              'the wallet returned a hash but the network never received the transaction. This usually means the wallet is on a broken Monad RPC - set it to https://testnet-rpc.monad.xyz, then try again.',
           })
           return false
         case 'pending':
           update(id, {
             status: 'TIMEOUT_OR_RPC_ERROR',
             hash,
-            error: 'still pending — retry status to re-check, or view on the explorer.',
+            error: 'still pending - retry status to re-check, or view on the explorer.',
           })
           return false
         case 'mined_success': {
@@ -280,7 +280,7 @@ export function useContractTx() {
             contractAddress: request.address,
             agreementId: request.agreementId,
             submittedAt: Date.now(),
-            error: `would revert: ${revert} — not submitted`,
+            error: `would revert: ${revert} - not submitted`,
           })
           return null
         }
@@ -339,7 +339,7 @@ export function useContractTx() {
           error:
             'your wallet returned a transaction hash, but the transaction was not broadcast to ' +
             'Monad Testnet (neither the official RPC nor the wallet provider can see it). Your ' +
-            "wallet's saved Monad Testnet RPC is broken — recheck the network panel and switch " +
+            "wallet's saved Monad Testnet RPC is broken - recheck the network panel and switch " +
             'to Monad Testnet, or remove and re-add the network with https://testnet-rpc.monad.xyz.',
         })
         return null

@@ -1,4 +1,4 @@
-"""Canonical agreement terms hashing — golden vectors and mutation tests.
+"""Canonical agreement terms hashing - golden vectors and mutation tests.
 
 The golden vector's expected hash was independently reproduced with viem's
 keccak256 in the frontend toolchain, proving a browser implementation can

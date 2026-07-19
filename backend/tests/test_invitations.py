@@ -1,4 +1,4 @@
-"""Invitation lifecycle: creation, review, claim, rotation, revocation —
+"""Invitation lifecycle: creation, review, claim, rotation, revocation -
 including concurrency, access control, and offchain-only semantics."""
 
 from __future__ import annotations

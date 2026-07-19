@@ -1,4 +1,4 @@
-"""contract_transactions — every application-originated contract write.
+"""contract_transactions - every application-originated contract write.
 
 A row is created the moment the wallet returns a transaction hash and is the
 durable record of that action (frontend sessionStorage is only a temporary
@@ -48,7 +48,7 @@ UNRESOLVED_STATUSES = {
 class ContractTransaction(Base):
     __tablename__ = "contract_transactions"
     __table_args__ = (
-        # One row per onchain transaction — recording is idempotent.
+        # One row per onchain transaction - recording is idempotent.
         UniqueConstraint("chain_id", "tx_hash"),
         {"mysql_charset": "utf8mb4", "mysql_engine": "InnoDB"},
     )

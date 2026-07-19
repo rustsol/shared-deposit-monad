@@ -1,7 +1,7 @@
 """Access logging with mandatory redaction.
 
 The invitation review/claim routes carry a secret token in the path, so this
-middleware — the only request logger in the application — replaces that path
+middleware - the only request logger in the application - replaces that path
 segment with ``[redacted]`` before anything is written. Cookies, Authorization
 headers, CSRF headers, and request bodies are never logged at all.
 

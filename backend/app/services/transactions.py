@@ -9,7 +9,7 @@ Trust rules:
 - A wallet-returned hash proves nothing; a row starts as SUBMITTED.
 - Success states come exclusively from a fetched receipt.
 - A recorded transaction must actually belong to the authenticated wallet
-  and target the verified contract with the claimed function/agreement —
+  and target the verified contract with the claimed function/agreement -
   any contradiction is STATE_MISMATCH, never silently accepted.
 - After a successful receipt the agreement cache is refreshed from a DIRECT
   contract read (the submitted function alone never determines status:
@@ -39,7 +39,7 @@ from app.models.transactions import (
 )
 
 # Every write the contract exposes today plus the planned claim/settlement
-# actions — the exact ABI function names, so one service covers them all.
+# actions - the exact ABI function names, so one service covers them all.
 ALLOWED_FUNCTIONS = {
     "createAgreement",
     "acceptAsTenant",
@@ -276,8 +276,8 @@ def register_known_transaction(
     tx_hash: str,
 ) -> ContractTransaction:
     """Operator path for KNOWN transaction hashes (e.g. the audited
-    agreement #2 history): the wallet is taken from the onchain sender —
-    never guessed — and the row goes through the exact same verification as
+    agreement #2 history): the wallet is taken from the onchain sender -
+    never guessed - and the row goes through the exact same verification as
     a user-recorded transaction. Idempotent per (chain, hash); the caller
     commits."""
     tx_hash = tx_hash.lower()

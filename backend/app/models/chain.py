@@ -1,4 +1,4 @@
-"""chain_events and chain_sync_state — the finalized-event cache foundation.
+"""chain_events and chain_sync_state - the finalized-event cache foundation.
 
 Rows in chain_events exist only for events observed in FINALIZED blocks
 (docs/02 §7.2): the worker (a later phase) never writes speculative rows, so
@@ -29,7 +29,7 @@ from app.database.types import (
 class ChainEvent(Base):
     __tablename__ = "chain_events"
     __table_args__ = (
-        # Exact event identity — duplicate reprocessing cannot create rows.
+        # Exact event identity - duplicate reprocessing cannot create rows.
         UniqueConstraint("chain_id", "contract_address", "tx_hash", "log_index"),
         {"mysql_charset": "utf8mb4", "mysql_engine": "InnoDB"},
     )

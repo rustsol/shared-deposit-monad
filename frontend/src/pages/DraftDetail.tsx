@@ -163,7 +163,7 @@ export default function DraftDetail() {
         return true
       },
     })
-    if (hash === null) setCreationError('The transaction did not complete — see the drawer for details.')
+    if (hash === null) setCreationError('The transaction did not complete - see the drawer for details.')
   }
 
   return (
@@ -173,7 +173,7 @@ export default function DraftDetail() {
         eyebrow="Agreement draft"
         meta={
           <span className={`badge ${data.status === 'CONFIRMED' ? 'active' : 'funding'}`}>
-            {data.status === 'CONFIRMED' ? 'Onchain' : 'Draft — not onchain yet'}
+            {data.status === 'CONFIRMED' ? 'Onchain' : 'Draft - not onchain yet'}
           </span>
         }
       />
@@ -216,7 +216,7 @@ export default function DraftDetail() {
           <p className="muted small">
             Before anything goes onchain, your browser independently recomputes the terms
             fingerprint and compares it with the server's. Creation stays disabled unless both
-            match byte-for-byte — so what you sign is exactly what was agreed.
+            match byte-for-byte - so what you sign is exactly what was agreed.
           </p>
           <button className="secondary" onClick={() => prepare.mutate()} disabled={prepare.isPending}>
             {prepare.isPending ? 'Checking…' : 'Run the terms check'}
@@ -235,7 +235,7 @@ export default function DraftDetail() {
                 {hashesMatch ? (
                   <span className="badge tone-success">Fingerprints match ✓</span>
                 ) : (
-                  <span className="badge tone-danger">Mismatch — do not proceed</span>
+                  <span className="badge tone-danger">Mismatch - do not proceed</span>
                 )}
               </p>
             </div>
@@ -266,7 +266,7 @@ export default function DraftDetail() {
         <h2>Invitations</h2>
         <p className="muted small">
           One private link per participant. Each link is shown <strong>once</strong>; joining a
-          link grants offchain access only — onchain acceptance is a separate wallet
+          link grants offchain access only - onchain acceptance is a separate wallet
           transaction by each participant.
         </p>
         <table className="data">
@@ -313,7 +313,7 @@ export default function DraftDetail() {
         )}
         {issuedInvitation && (
           <div className="notice warn">
-            <strong>Copy this link now — it is shown only once.</strong>
+            <strong>Copy this link now - it is shown only once.</strong>
             <p className="mono small">
               {`${window.location.origin}/invitations/${issuedInvitation.invitation_token}`}
             </p>

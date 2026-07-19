@@ -27,7 +27,7 @@ describe('StatusBadge', () => {
     expect(describeAgreementStatus('ACTIVE')).toBe('Deposit locked')
     expect(describeAgreementStatus('FINALIZED')).toBe('Settled')
     expect(describeAgreementStatus('CANCELLED')).toBe('Cancelled')
-    // Unknown statuses fall back to the raw name — never hidden.
+    // Unknown statuses fall back to the raw name - never hidden.
     expect(describeAgreementStatus('SOMETHING_NEW')).toBe('SOMETHING_NEW')
   })
 })

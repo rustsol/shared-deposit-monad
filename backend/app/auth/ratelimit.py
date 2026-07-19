@@ -5,7 +5,7 @@ only for the documented single-instance deployment. It does not coordinate
 across multiple server instances; the interface is deliberately small so a
 shared-store implementation can replace it later without touching routes.
 
-Keys never contain raw tokens, signatures, or nonces — only a scope name plus
+Keys never contain raw tokens, signatures, or nonces - only a scope name plus
 a client-network identifier and/or normalized wallet address.
 """
 

@@ -6,7 +6,7 @@ Implements docs/02 §4.1 exactly:
   whitespace), ``ensure_ascii=False``;
 - wallet addresses normalized to lowercase hex;
 - timestamps as integer Unix seconds;
-- amounts as decimal wei strings — floats are rejected outright;
+- amounts as decimal wei strings - floats are rejected outright;
 - tenant list in the exact submitted order (which is the onchain order);
 - schema version, chain ID, currency, and rules included;
 - hash = Ethereum Keccak-256 (eth-hash/pycryptodome backend), NOT NIST

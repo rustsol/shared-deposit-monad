@@ -1,6 +1,6 @@
 // Plain-language presentation of STORED, receipt-verified application
 // transactions (pure; unit-tested). Every timeline row corresponds to one
-// contract_transactions record — nothing is inferred, and rows without a
+// contract_transactions record - nothing is inferred, and rows without a
 // successful receipt are labelled with their honest status instead of being
 // dressed up as activity.
 
@@ -45,10 +45,10 @@ export function activityTitle(tx: StoredTransaction): string {
   const base = FUNCTION_TITLES[tx.function_name] ?? tx.function_name
   const events = eventNames(tx)
   if (tx.function_name === 'acceptAsRecipient' && events.includes('AgreementActivated')) {
-    return 'Recipient accepted — deposit fully funded, agreement activated'
+    return 'Recipient accepted - deposit fully funded, agreement activated'
   }
   if (tx.function_name === 'deposit' && events.includes('AgreementActivated')) {
-    return 'Contribution deposited — deposit fully funded, agreement activated'
+    return 'Contribution deposited - deposit fully funded, agreement activated'
   }
   return base
 }
@@ -85,7 +85,7 @@ export function parseUtcSeconds(timestamp: string): number {
 }
 
 /** Timeline order: mined transactions by block, then still-unmined ones by
- *  submission time — never interleaved ahead of confirmed history. */
+ *  submission time - never interleaved ahead of confirmed history. */
 export function toTimeline(transactions: StoredTransaction[]): ActivityRow[] {
   const rows = transactions.map(toActivityRow)
   return rows.sort((a, b) => {

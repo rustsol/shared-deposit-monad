@@ -135,7 +135,7 @@ class ChainService:
         return "0x" + bytes(self.web3.eth.get_code(Web3.to_checksum_address(address))).hex()
 
     def get_block_header(self, block_number: int) -> dict[str, Any]:
-        """Hash and timestamp only — enough to timestamp a mined receipt."""
+        """Hash and timestamp only - enough to timestamp a mined receipt."""
         block = self.web3.eth.get_block(block_number)
         return {
             "hash": "0x" + bytes(block["hash"]).hex(),

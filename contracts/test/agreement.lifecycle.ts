@@ -16,7 +16,7 @@ import {
   ZERO_HASH,
 } from "./helpers";
 
-describe("SharedDepositEscrow — agreement lifecycle", () => {
+describe("SharedDepositEscrow - agreement lifecycle", () => {
   describe("creation", () => {
     it("creates a valid agreement, stores exact state, and emits AgreementCreated", async () => {
       const { escrow, creator, tenantB, recipient } =

@@ -285,7 +285,7 @@ def test_mined_success_verifies_and_refreshes_cache(
 def test_recipient_acceptance_activates_cache_via_direct_read(
     db_session: Session, settings: Any, chain: FakeTxChain
 ) -> None:
-    """acceptAsRecipient also activated the agreement — the cache must come
+    """acceptAsRecipient also activated the agreement - the cache must come
     from the direct read (ACTIVE), never from the submitted function alone."""
     index = seed_index(db_session, status="FUNDING")
     row = record_submitted(
@@ -431,7 +431,7 @@ def test_metadata_mismatches_are_flagged(
         submission(TX_ACCEPT_RECIPIENT, "acceptAsRecipient", value_wei="1"),
     )
     db_session.flush()
-    # (sender also differs here, which is flagged first — record the creator's
+    # (sender also differs here, which is flagged first - record the creator's
     # own deposit with a wrong value to isolate the value check)
     row3.wallet_address = RECIPIENT
     verify_transaction(db_session, settings, chain, row3)
@@ -451,7 +451,7 @@ def test_verification_makes_no_range_queries(
     db_session: Session, settings: Any, chain: FakeTxChain
 ) -> None:
     """The whole flow is hash-addressed: the fake chain exposes no get_logs
-    surface and records every call — nothing may scan block ranges."""
+    surface and records every call - nothing may scan block ranges."""
     seed_index(db_session)
     row = record_submitted(
         db_session, settings, CONTRACT, CREATOR, submission(TX_ACCEPT_CREATOR, "acceptAsTenant")

@@ -1,7 +1,7 @@
 """Agreement #2 backfill: registering the eight known, receipt-verified
 transactions produces a complete VERIFIED timeline and an ACTIVE cache.
 
-Runs entirely on the captured real fixture — no live RPC. The same
+Runs entirely on the captured real fixture - no live RPC. The same
 `register_known_transaction` path is what the operator CLI executes against
 Monad Testnet.
 """
@@ -66,7 +66,7 @@ def test_agreement2_backfill_reaches_active_cache(db_session: Session) -> None:
     # Deposits carry the exact deposited value.
     deposits = [r for r in rows if r.function_name == "deposit"]
     assert all(str(int(r.value_wei)) == "500000000000000000" for r in deposits)
-    # The wallet is always the true onchain sender — never an operator guess.
+    # The wallet is always the true onchain sender - never an operator guess.
     assert all(r.decoded_events_json for r in rows)
     # The cache followed the DIRECT contract read to ACTIVE.
     assert index.status_cache == "ACTIVE"

@@ -16,7 +16,7 @@ import {
 } from '../lib/diagnostics'
 
 function yn(value: boolean | null): string {
-  return value === null ? '—' : value ? 'Yes' : 'No'
+  return value === null ? '-' : value ? 'Yes' : 'No'
 }
 
 // Only a genuine chain/contract fault is RPC evidence. A session mismatch or an
@@ -93,17 +93,17 @@ export function NetworkDiagnosticsPanel({
           <tr>
             <td>Connected wallet</td>
             <td className="mono">
-              {data.connectedWallet ? shortAddress(data.connectedWallet) : '—'}
+              {data.connectedWallet ? shortAddress(data.connectedWallet) : '-'}
             </td>
           </tr>
           <tr>
             <td>Signed-in wallet</td>
-            <td className="mono">{data.authWallet ? shortAddress(data.authWallet) : '—'}</td>
+            <td className="mono">{data.authWallet ? shortAddress(data.authWallet) : '-'}</td>
           </tr>
           <tr>
             <td>Wallet client account</td>
             <td className="mono">
-              {data.walletClientAccount ? shortAddress(data.walletClientAccount) : '—'}
+              {data.walletClientAccount ? shortAddress(data.walletClientAccount) : '-'}
             </td>
           </tr>
           <tr>
@@ -134,11 +134,11 @@ export function NetworkDiagnosticsPanel({
         <tbody>
           <tr>
             <td>Wallet chain ID</td>
-            <td>{data.wallet.chainId ?? '—'}</td>
+            <td>{data.wallet.chainId ?? '-'}</td>
           </tr>
           <tr>
             <td>Application chain ID</td>
-            <td>{data.app.chainId ?? '—'}</td>
+            <td>{data.app.chainId ?? '-'}</td>
           </tr>
           <tr>
             <td>Contract via application RPC</td>
@@ -146,7 +146,7 @@ export function NetworkDiagnosticsPanel({
           </tr>
           <tr>
             <td>Latest application block</td>
-            <td className="amount">{data.app.latestBlock ?? '—'}</td>
+            <td className="amount">{data.app.latestBlock ?? '-'}</td>
           </tr>
           <tr>
             <td>Network ready</td>
@@ -179,7 +179,7 @@ export function NetworkDiagnosticsPanel({
       {/* OPTIONAL DIAGNOSTICS --------------------------------------------- */}
       <h3 className="small">Optional diagnostics</h3>
       <p className="small muted">
-        These are best-effort reads. An unavailable value here does not block transacting — the
+        These are best-effort reads. An unavailable value here does not block transacting - the
         wallet manages its own nonce and the application RPC is authoritative.
       </p>
       <table className="data small">
@@ -193,8 +193,8 @@ export function NetworkDiagnosticsPanel({
         <tbody>
           <tr>
             <td>Latest block</td>
-            <td className="amount">{data.wallet.latestBlock ?? '—'}</td>
-            <td className="amount">{data.app.latestBlock ?? '—'}</td>
+            <td className="amount">{data.wallet.latestBlock ?? '-'}</td>
+            <td className="amount">{data.app.latestBlock ?? '-'}</td>
           </tr>
           <tr>
             <td>Nonce (latest)</td>
@@ -212,7 +212,7 @@ export function NetworkDiagnosticsPanel({
               {data.wallet.balanceWei !== null ? weiToMon(data.wallet.balanceWei) : 'Unavailable'}
             </td>
             <td className="amount">
-              {data.app.balanceWei !== null ? weiToMon(data.app.balanceWei) : '—'}
+              {data.app.balanceWei !== null ? weiToMon(data.app.balanceWei) : '-'}
             </td>
           </tr>
           <tr>

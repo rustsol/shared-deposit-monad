@@ -1,4 +1,4 @@
-// Invitation review and offchain claim. The token stays in the URL only —
+// Invitation review and offchain claim. The token stays in the URL only -
 // never logged, never stored, never echoed into page state beyond this route.
 
 import { Link, useParams } from 'react-router-dom'
@@ -88,7 +88,7 @@ export default function InvitationReview() {
       <div className="card">
         {data.property_alias && (
           <p>
-            <strong>{data.property_alias}</strong> — invited as{' '}
+            <strong>{data.property_alias}</strong> - invited as{' '}
             <span className="badge">{data.role === 'RECIPIENT' ? 'Deposit recipient' : 'Tenant'}</span>
           </p>
         )}
@@ -129,14 +129,14 @@ export default function InvitationReview() {
             {claim.isSuccess ? (
               <div className="notice success">
                 <strong>Joined offchain.</strong> {claim.data.note} Check your{' '}
-                <Link to="/dashboard">dashboard</Link> — once the agreement is onchain you will
+                <Link to="/dashboard">dashboard</Link> - once the agreement is onchain you will
                 accept and fund it with real wallet transactions there.
               </div>
             ) : (
               <>
                 <p className="muted small">
                   Joining links this draft to your wallet in the application. It does{' '}
-                  <strong>not</strong> accept the agreement onchain — that will be a separate
+                  <strong>not</strong> accept the agreement onchain - that will be a separate
                   wallet transaction you approve later.
                 </p>
                 <button className="primary" disabled={claim.isPending} onClick={() => claim.mutate()}>

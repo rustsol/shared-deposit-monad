@@ -1,7 +1,7 @@
 """Constraint, precision, and schema-security tests against real MySQL.
 
 All rows are written inside per-test transactions that roll back (db_session)
-or into the guarded *_test database with cleanup (clean_tables) — nothing
+or into the guarded *_test database with cleanup (clean_tables) - nothing
 here ever touches shared_deposit.
 """
 

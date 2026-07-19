@@ -1,4 +1,4 @@
-// Settings: real session, wallet, and network facts only — no preferences
+// Settings: real session, wallet, and network facts only - no preferences
 // are stored anywhere, and nothing here can touch funds.
 
 import { useAccount, useChainId, useDisconnect } from 'wagmi'
@@ -44,7 +44,7 @@ export default function Settings() {
           <dd>
             {status === 'authenticated' && wallet ? (
               <>
-                Yes — <WalletAddress address={wallet} />
+                Yes - <WalletAddress address={wallet} />
               </>
             ) : (
               'No'
@@ -99,7 +99,7 @@ export default function Settings() {
                 : `Wrong network (chain ${chainId})`}
           </dd>
           <dt>App version</dt>
-          <dd>{config.data?.app_version ?? '—'}</dd>
+          <dd>{config.data?.app_version ?? '-'}</dd>
         </dl>
         {config.data?.contract_address && (
           <ProofRow label="Escrow contract" value={config.data.contract_address} />
@@ -117,7 +117,7 @@ export default function Settings() {
           Your session lives in a secure cookie; in-flight transaction recovery data stays in
           this tab only. Private aliases, addresses, and terms are stored on the application
           server and shown only to participants. Wallet addresses, amounts, dates, and votes are
-          public on Monad Testnet — that part is permanent.
+          public on Monad Testnet - that part is permanent.
         </p>
       </section>
     </main>

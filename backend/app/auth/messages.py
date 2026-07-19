@@ -2,15 +2,15 @@
 
 docs/02 §5.2 defines the required message contents (domain, URI, address,
 chain ID, nonce, issued time, expiry) but not an exact text format, so this
-implementation uses EIP-4361 verbatim — the same format viem's
-``createSiweMessage`` produces — so the browser can reproduce the message
+implementation uses EIP-4361 verbatim - the same format viem's
+``createSiweMessage`` produces - so the browser can reproduce the message
 byte-for-byte later. Timestamps use the JavaScript ``Date.toISOString()``
 millisecond form for exact cross-implementation equality. The address is
 rendered EIP-55 checksummed as EIP-4361 requires; storage and comparison use
 the application's lowercase normalization.
 
 Signing this message proves wallet ownership only: it is not a transaction,
-moves no funds, and grants no contract permission — and the statement says so.
+moves no funds, and grants no contract permission - and the statement says so.
 """
 
 import re

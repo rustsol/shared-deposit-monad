@@ -1,4 +1,4 @@
-// Wallet picker: lists every connector wagmi exposes — all EIP-6963 browser
+// Wallet picker: lists every connector wagmi exposes - all EIP-6963 browser
 // wallets (MetaMask, Rabby, Brave, Coinbase extension, …) plus Coinbase Wallet
 // and, when configured, WalletConnect. The user chooses which wallet to
 // connect. No private key ever leaves the wallet.
@@ -42,7 +42,7 @@ export function WalletPicker({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className="muted small">
-          Choose any installed wallet. Your keys never leave the wallet — signing in
+          Choose any installed wallet. Your keys never leave the wallet - signing in
           later is a signature, not a transaction.
         </p>
         <div className="wallet-list">

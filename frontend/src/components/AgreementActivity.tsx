@@ -1,5 +1,5 @@
 // Verified application-transaction timeline for one agreement. Data source:
-// contract_transactions via the backend — receipt-verified records only,
+// contract_transactions via the backend - receipt-verified records only,
 // never inferred events. Direct contract reads remain authoritative for all
 // current state; this list is history.
 
@@ -50,12 +50,12 @@ export function AgreementActivity(props: {
                 <td>{row.title}</td>
                 <td className="mono">{shortAddress(row.wallet)}</td>
                 <td className="amount">
-                  {row.amountWei ? `${weiToMon(row.amountWei)} MON` : '—'}
+                  {row.amountWei ? `${weiToMon(row.amountWei)} MON` : '-'}
                 </td>
                 <td>
-                  {row.timestamp ? formatTimestamp(parseUtcSeconds(row.timestamp)) : '—'}
+                  {row.timestamp ? formatTimestamp(parseUtcSeconds(row.timestamp)) : '-'}
                 </td>
-                <td className="mono">{row.blockNumber ?? '—'}</td>
+                <td className="mono">{row.blockNumber ?? '-'}</td>
                 <td>
                   <a href={row.explorerTxUrl} target="_blank" rel="noreferrer" className="mono">
                     {shortAddress(row.txHash)} ↗

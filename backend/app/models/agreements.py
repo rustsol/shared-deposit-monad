@@ -3,7 +3,7 @@ agreement cache plus private metadata.
 
 agreement_drafts / agreement_draft_tenants are authoritative ONLY until the
 agreement exists onchain. agreement_index is a cache reconciled from finalized
-chain events and direct contract reads — it can never mark an agreement
+chain events and direct contract reads - it can never mark an agreement
 funded, active, finalized, or withdrawn on its own; `status_cache` is named
 for exactly that reason. agreement_metadata holds private offchain labels.
 """
@@ -82,7 +82,7 @@ class AgreementDraftTenant(Base):
 
 
 class AgreementIndex(Base):
-    """Event-derived cache only — never authoritative for financial state."""
+    """Event-derived cache only - never authoritative for financial state."""
 
     __tablename__ = "agreement_index"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_engine": "InnoDB"}

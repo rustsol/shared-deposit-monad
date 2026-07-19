@@ -1,5 +1,5 @@
 // Public landing page: what the product does, in plain language, plus the
-// verifiable contract facts. No metrics, no charts — only real information.
+// verifiable contract facts. No metrics, no charts - only real information.
 
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -27,7 +27,7 @@ export default function Landing() {
         <h1>One deposit. Clear contributions. Verifiable settlement.</h1>
         <p className="lead">
           A shared rental deposit for a small group of tenants and one deposit recipient. Every
-          contribution is locked in a single onchain escrow — nobody's roommate holds the money,
+          contribution is locked in a single onchain escrow - nobody's roommate holds the money,
           and no administrator can touch it.
         </p>
         <div className="button-row">
@@ -80,7 +80,7 @@ export default function Landing() {
         <h2 id="proof-heading">Verify it yourself</h2>
         {config.isLoading && <p className="muted">Loading network configuration…</p>}
         {config.isError && (
-          <div className="notice error">Backend unavailable — start the API server.</div>
+          <div className="notice error">Backend unavailable - start the API server.</div>
         )}
         {config.data && config.data.deployment_status === 'verified' && (
           <>

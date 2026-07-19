@@ -2,7 +2,7 @@
   "name": "shared-deposit-monad",
   "private": true,
   "version": "0.1.0",
-  "description": "Shared Deposit — wallet-based rental security-deposit escrow on Monad (root workspace scripts)",
+  "description": "Shared Deposit - wallet-based rental security-deposit escrow on Monad (root workspace scripts)",
   "license": "MIT",
   "scripts": {
     "contracts:compile": "npm --prefix contracts run compile",

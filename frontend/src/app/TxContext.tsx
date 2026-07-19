@@ -90,7 +90,7 @@ export function makeActionKey(params: {
   ].join(':')
 }
 
-// Only public transaction facts are persisted — never keys, signatures,
+// Only public transaction facts are persisted - never keys, signatures,
 // session/CSRF/invitation tokens, or draft content. sessionStorage (not
 // localStorage) scopes recovery to the current browser session.
 const STORAGE_KEY = 'sd.tx.v2'
@@ -126,7 +126,7 @@ function persist(entries: TxEntry[]): void {
     }))
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
   } catch {
-    // Storage unavailable (private mode / quota) — recovery is best-effort.
+    // Storage unavailable (private mode / quota) - recovery is best-effort.
   }
 }
 
@@ -190,7 +190,7 @@ export function describeTxStatus(status: TxStatus): string {
     PREPARING: 'Preparing',
     WAITING_FOR_WALLET: 'Waiting for wallet…',
     USER_REJECTED: 'Rejected in wallet',
-    BROADCAST_REQUESTED: 'Broadcast requested — confirming propagation…',
+    BROADCAST_REQUESTED: 'Broadcast requested - confirming propagation…',
     BROADCAST: 'Broadcast',
     PENDING_ONCHAIN: 'Pending onchain',
     NONCE_BLOCKED: 'Waiting behind an earlier wallet transaction',
@@ -203,7 +203,7 @@ export function describeTxStatus(status: TxStatus): string {
     BROADCAST_FAILED_NOT_PROPAGATED: 'Not broadcast to Monad Testnet',
     WALLET_RPC_DIVERGED: 'Wallet RPC diverged from the network',
     APPLICATION_RPC_DELAYED: 'Confirming on the official RPC…',
-    TIMEOUT_OR_RPC_ERROR: 'Timed out — retry status',
+    TIMEOUT_OR_RPC_ERROR: 'Timed out - retry status',
   }
   return labels[status]
 }

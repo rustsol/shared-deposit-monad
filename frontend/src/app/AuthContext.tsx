@@ -10,7 +10,7 @@ import { monadTestnet } from '../lib/chain'
 
 const WRONG_CHAIN_MESSAGE =
   'Your wallet must be on Monad Testnet (chain 10143) to sign in. This wallet could not ' +
-  'switch to Monad Testnet — some wallets (for example Phantom) do not support it. Please ' +
+  'switch to Monad Testnet - some wallets (for example Phantom) do not support it. Please ' +
   'use MetaMask or Rabby, which can add and switch to Monad Testnet.'
 
 export type AuthStatus =
@@ -35,7 +35,7 @@ interface AuthState {
    *  different wallet is connected, so the UI can offer a productive re-auth. */
   wallet: string | null
   /** True when a session exists but the connected wallet is a different
-   *  address — an ACCOUNT problem, not a network fault. */
+   *  address - an ACCOUNT problem, not a network fault. */
   accountMismatch: boolean
   error: string | null
   signIn: () => Promise<void>
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : status
 
   // A real session exists for a DIFFERENT connected wallet. This is an account
-  // change to be resolved by re-authenticating — never an RPC/network fault.
+  // change to be resolved by re-authenticating - never an RPC/network fault.
   const accountMismatch = Boolean(
     status === 'authenticated' &&
       isConnected &&
@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const confirmed = await api<MeResponse>('/auth/me')
       if (!confirmed.authenticated || !confirmed.wallet_address) {
         throw new Error(
-          'the browser did not accept the session cookie — reload the page and sign in again',
+          'the browser did not accept the session cookie - reload the page and sign in again',
         )
       }
       setWallet(verified.wallet_address)

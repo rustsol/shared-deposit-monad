@@ -121,7 +121,7 @@ def test_recording_validates_chain_and_contract(client: TestClient) -> None:
 
 def test_foreign_transaction_cannot_be_attached(client: TestClient) -> None:
     """WALLET_A records a hash whose real onchain sender is the creator
-    wallet — verification flags it instead of attaching it."""
+    wallet - verification flags it instead of attaching it."""
     headers = login_headers(client, WALLET_A)
     response = client.post("/api/v1/transactions", json=record_body(), headers=headers)
     assert response.status_code == 201
@@ -160,7 +160,7 @@ def test_reload_recovery_lists_unresolved_transactions(
 
     # Retry endpoint picks it up once the network knows the hash. The real
     # sender is the creator wallet, so the honest terminal here is
-    # STATE_MISMATCH — what matters is that verification re-ran.
+    # STATE_MISMATCH - what matters is that verification re-ran.
     chain.unknown_hashes.clear()
     retried = client.post(
         f"/api/v1/transactions/{CHAIN_ID}/{TX_ACCEPT_CREATOR}/verify", headers=headers

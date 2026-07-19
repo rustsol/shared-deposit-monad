@@ -1,6 +1,6 @@
 // Backend API client. Session identity lives in the HttpOnly cookie
 // (credentials: 'include'); mutations carry the session-bound CSRF token in
-// a header. The CSRF value is kept only in memory — never in localStorage.
+// a header. The CSRF value is kept only in memory - never in localStorage.
 
 // Same-origin in development (Vite proxies /api to the backend) so the
 // HttpOnly SameSite=Lax session cookie is always sent.

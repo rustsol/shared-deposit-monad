@@ -310,7 +310,7 @@ def _participant_index(
     db: Session, chain_id: int, contract_address: str, agreement_id: int, wallet: str
 ) -> tuple[AgreementIndex, AgreementMetadata | None]:
     """The agreement_index row, but only for a participant wallet. 404
-    otherwise — non-participants cannot even learn the agreement exists."""
+    otherwise - non-participants cannot even learn the agreement exists."""
     key = (chain_id, contract_address.lower(), Decimal(agreement_id))
     index = db.get(AgreementIndex, key)
     metadata = db.get(AgreementMetadata, key)

@@ -1,8 +1,8 @@
-"""audit_log — append-oriented record of private application actions only
+"""audit_log - append-oriented record of private application actions only
 (login, draft creation, invitation creation, evidence access, sync repair).
 
 Never a replacement for contract events, and never a home for secrets: no raw
-tokens, no nonces, no keys, no full request bodies — only safe metadata.
+tokens, no nonces, no keys, no full request bodies - only safe metadata.
 """
 
 from datetime import datetime

@@ -1,6 +1,6 @@
 // Live agreement page. ALL financial and role state comes from DIRECT contract
 // reads (wagmi/viem against Monad Testnet). The backend supplies only the
-// private alias, terms metadata, and stored transaction history — never
+// private alias, terms metadata, and stored transaction history - never
 // acceptance or funding state, and never role. Role and permitted actions
 // come from the shared resolver.
 
@@ -105,7 +105,7 @@ type RawClaim = {
   status: number
 }
 
-const CLAIM_STATUS_LABELS = ['—', 'Voting open', 'Approved', 'Rejected', 'Withdrawn'] as const
+const CLAIM_STATUS_LABELS = ['-', 'Voting open', 'Approved', 'Rejected', 'Withdrawn'] as const
 const CLAIM_TYPE_LABELS = ['Shared deduction', 'Individual deduction'] as const
 
 export default function AgreementDetail() {
@@ -226,7 +226,7 @@ export default function AgreementDetail() {
           title="Could not read this agreement"
           retry={() => void agreementRead.refetch()}
         >
-          The contract could not be read. Check your connection and the address in the URL —
+          The contract could not be read. Check your connection and the address in the URL -
           nothing onchain is affected.
         </ErrorState>
       </main>
@@ -324,7 +324,7 @@ export default function AgreementDetail() {
       {statusName === 'FUNDING' && role.fundingDeadlinePassed && (
         <div className="notice error">
           The funding deadline for this agreement has passed. It can no longer be accepted or
-          funded and will not activate — it can only be cancelled, after which each tenant
+          funded and will not activate - it can only be cancelled, after which each tenant
           withdraws their own contribution.
         </div>
       )}
@@ -356,7 +356,7 @@ export default function AgreementDetail() {
             />
             {statusName === 'ACTIVE' && (
               <p className="notice success" style={{ marginBottom: 0 }}>
-                The deposit is fully funded and locked. No one — including the creator — can move
+                The deposit is fully funded and locked. No one - including the creator - can move
                 these funds outside the agreement's own rules.
               </p>
             )}
@@ -466,7 +466,7 @@ export default function AgreementDetail() {
             </div>
           ) : statusName === 'ACTIVE' ? (
             <div className="notice success">
-              All acceptances and contributions are complete — the deposit is locked and the
+              All acceptances and contributions are complete - the deposit is locked and the
               agreement is active.
             </div>
           ) : statusName === 'FUNDING' ? (
@@ -484,7 +484,7 @@ export default function AgreementDetail() {
                   {role.isCreator && (
                     <div className="notice">
                       You created this agreement <strong>and</strong> you are one of its tenants.
-                      Creating it gave you no special power over the funds — you accept and fund
+                      Creating it gave you no special power over the funds - you accept and fund
                       your own share like any tenant, and you cannot move anyone else's money.
                     </div>
                   )}
@@ -537,7 +537,7 @@ export default function AgreementDetail() {
                             : ''
                       }`}
                     >
-                      {CLAIM_STATUS_LABELS[claim!.status] ?? '—'}
+                      {CLAIM_STATUS_LABELS[claim!.status] ?? '-'}
                     </span>
                     <AmountDisplay wei={claim!.amount} />
                   </div>
@@ -584,7 +584,7 @@ export default function AgreementDetail() {
                 lease ends (
                 <DeadlineDisplay seconds={agreement.leaseEnd.toString()} passedText="ended" />
                 ) and all claims are resolved, the contract itself computes exact refunds and
-                approved deductions — no administrator is involved.
+                approved deductions - no administrator is involved.
               </p>
               <dl className="kv">
                 <dt>Unresolved claims</dt>

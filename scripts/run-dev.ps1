@@ -1,6 +1,6 @@
 # Opens the Shared Deposit development services in TWO independent, persistent
 # PowerShell windows. Each window keeps running after this launcher exits,
-# because Start-Process spawns a genuinely separate process — this script does
+# because Start-Process spawns a genuinely separate process - this script does
 # not falsely keep servers alive inside its own lifetime.
 #
 # WAMP MySQL must already be running (it runs as a Windows service). Apache is

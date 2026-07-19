@@ -1,7 +1,7 @@
 """Verified public deployment metadata loader.
 
 The single source for the escrow contract address is
-``contracts/deployments/monad-testnet.json`` — written only by the deployment
+``contracts/deployments/monad-testnet.json`` - written only by the deployment
 script after a real receipt, bytecode verification, and source verification.
 No placeholder addresses exist anywhere; when the file is absent the
 application reports deployment status ``missing`` instead of inventing one.

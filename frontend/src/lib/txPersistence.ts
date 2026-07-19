@@ -104,7 +104,7 @@ const BACKEND_UNRESOLVED = new Set([
 /**
  * Pure merge for reload recovery: backend rows that are not already tracked
  * locally become resumable entries. Only rows recorded by the connected
- * wallet are restored — a different wallet's transactions never attach.
+ * wallet are restored - a different wallet's transactions never attach.
  */
 export function mergeBackendTransactions(
   existing: Pick<TxEntry, 'hash'>[],

@@ -430,7 +430,7 @@ contract SharedDepositEscrow is ReentrancyGuard {
     /// @notice Before activation a tenant may withdraw part or all of its own funded
     ///         amount (even after accepting; the agreement simply remains unready).
     ///         This is active-funding accounting, so fundedAmount and totalFunded
-    ///         decrease — unlike cancelled-funding withdrawal, which preserves them.
+    ///         decrease - unlike cancelled-funding withdrawal, which preserves them.
     function withdrawFundingBeforeActivation(
         uint256 agreementId,
         uint128 amount
@@ -510,7 +510,7 @@ contract SharedDepositEscrow is ReentrancyGuard {
     /// @notice The recipient submits an evidence-backed deduction claim during the
     ///         claim window (`leaseEnd <= now <= claimDeadline`). Only deterministic
     ///         hashes of the reason and evidence manifest are stored; the readable
-    ///         reason and the files themselves stay offchain. No funds move here —
+    ///         reason and the files themselves stay offchain. No funds move here -
     ///         the claim only reserves deposit capacity until it resolves.
     ///
     ///         Lifetime limit: at most MAX_CLAIMS (32) claim IDs may ever be created
@@ -670,7 +670,7 @@ contract SharedDepositEscrow is ReentrancyGuard {
     /// @notice After the settlement deadline has strictly passed and no unresolved
     ///         claim remains, anyone may finalize the agreement (per the scope
     ///         document; finalization is permissionless because it only executes the
-    ///         predetermined settlement — it moves no funds and favors no caller).
+    ///         predetermined settlement - it moves no funds and favors no caller).
     ///         Every tenant refund and the recipient payout are computed once, stored,
     ///         and never changed afterwards. Withdrawals are separate pull payments.
     function finalizeAgreement(uint256 agreementId) external {
@@ -692,9 +692,9 @@ contract SharedDepositEscrow is ReentrancyGuard {
     ///           remaining[i] = fundedAmount[i] - approvedIndividualClaims[i]
     ///         (never underflows: per-tenant invariant approved <= funded).
     ///      B. totalRemaining = sum(remaining); sharedTotal = sharedApprovedClaims.
-    ///         sharedTotal <= totalRemaining is provable — sharedApprovedClaims +
+    ///         sharedTotal <= totalRemaining is provable - sharedApprovedClaims +
     ///         sum(approvedIndividualClaims) == totalApprovedClaims <= totalFunded and
-    ///         totalRemaining == totalFunded - sum(approvedIndividualClaims) — and is
+    ///         totalRemaining == totalFunded - sum(approvedIndividualClaims) - and is
     ///         also kept as the documented defensive check.
     ///      C. Base allocation per tenant with OpenZeppelin Math.mulDiv (floor,
     ///         overflow-safe): base[i] = mulDiv(sharedTotal, remaining[i], totalRemaining).
@@ -881,7 +881,7 @@ contract SharedDepositEscrow is ReentrancyGuard {
         return votes[agreementId][claimId][tenant];
     }
 
-    /// @notice The recipient payout — the exact total of approved claims. Immutable
+    /// @notice The recipient payout - the exact total of approved claims. Immutable
     ///         once the agreement is FINALIZED; before that it reflects approvals so
     ///         far. Withdrawal state is `recipientPayoutWithdrawn` on getAgreement.
     function getRecipientPayout(uint256 agreementId) external view returns (uint128) {

@@ -42,7 +42,7 @@ describe('transaction state model', () => {
   })
 
   test('a non-propagated broadcast is terminal (releases the lock); a diverged one is not', () => {
-    // If neither RPC ever sees the tx, the action is over — the user must fix
+    // If neither RPC ever sees the tx, the action is over - the user must fix
     // the wallet network and start again, so the lock must release.
     expect(TERMINAL_STATUSES).toContain('BROADCAST_FAILED_NOT_PROPAGATED')
     // A diverged tx may still be real onchain, so it keeps the lock until receipt.

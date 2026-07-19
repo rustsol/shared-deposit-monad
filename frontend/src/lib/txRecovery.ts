@@ -10,8 +10,8 @@ export function isResumable(status: string): boolean {
   return RESUMABLE.includes(status)
 }
 
-/** A restored transaction is stale — and must not be resumed or attached to
- *  the current session — when its chain or connected wallet differs. */
+/** A restored transaction is stale - and must not be resumed or attached to
+ *  the current session - when its chain or connected wallet differs. */
 export function isStaleForSession(
   tx: Pick<TxEntry, 'status' | 'hash' | 'chainId' | 'connectedWallet'>,
   connectedWallet: string | null,

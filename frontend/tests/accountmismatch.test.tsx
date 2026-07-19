@@ -1,5 +1,5 @@
 // Account-change handling: when a session exists for a different wallet, the UI
-// must present a productive re-authentication path — never participant actions,
+// must present a productive re-authentication path - never participant actions,
 // never an RPC accusation.
 
 import { act, cleanup, render, screen, fireEvent } from '@testing-library/react'

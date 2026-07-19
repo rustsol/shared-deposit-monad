@@ -1,7 +1,7 @@
 """Safe audit logging: append-oriented rows with no secret material.
 
 Callers pass only safe identifiers and category strings. This module never
-receives raw nonces, tokens, signatures, cookies, URLs, or request bodies —
+receives raw nonces, tokens, signatures, cookies, URLs, or request bodies -
 enforced by convention here and by the logging/audit redaction tests.
 """
 

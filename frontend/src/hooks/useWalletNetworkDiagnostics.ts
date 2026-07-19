@@ -1,7 +1,7 @@
 // Runs the dual-provider Monad Testnet diagnostics: the injected wallet
 // provider (EIP-1193, via the active connector) and the application public
 // client (our official Monad RPC) are queried INDEPENDENTLY and compared.
-// Reads only — never signs, never sends, never touches key material.
+// Reads only - never signs, never sends, never touches key material.
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount, useChainId } from 'wagmi'
@@ -23,8 +23,8 @@ const hexToBig = (hex: unknown): string | null =>
   typeof hex === 'string' ? BigInt(hex).toString() : null
 
 // Each injected read is independent and best-effort: a wallet that does not
-// support (or transiently fails) one optional method — commonly
-// eth_getTransactionCount — must not blank out the chain ID, block, or contract
+// support (or transiently fails) one optional method - commonly
+// eth_getTransactionCount - must not blank out the chain ID, block, or contract
 // code that DO succeed. Optional reads staying null is a soft diagnostic, not a
 // blocking fault.
 async function readInjected(

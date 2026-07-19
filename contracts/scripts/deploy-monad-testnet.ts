@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     if (code && code !== "0x") {
       throw new Error(
         `A verified deployment already exists at ${existing.contractAddress} and still has ` +
-          "code. Refusing to redeploy silently — remove or archive the record only with " +
+          "code. Refusing to redeploy silently - remove or archive the record only with " +
           "explicit approval."
       );
     }

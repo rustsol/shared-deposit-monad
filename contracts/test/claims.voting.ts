@@ -47,7 +47,7 @@ function sharedClaimArgs(amount: bigint) {
   ] as const;
 }
 
-describe("SharedDepositEscrow — claims and voting", () => {
+describe("SharedDepositEscrow - claims and voting", () => {
   describe("claim submission", () => {
     it("accepts a valid shared claim, stores it immutably, and updates accounting", async () => {
       const { escrow, recipient, agreementId } =

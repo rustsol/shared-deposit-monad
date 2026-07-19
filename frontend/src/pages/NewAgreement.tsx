@@ -77,7 +77,7 @@ export default function NewAgreement() {
     if (current === 1) {
       if (!isAddress(recipient.trim())) return 'Enter a valid deposit-recipient wallet address.'
       const others = tenants.map((t) => t.wallet.trim()).filter(Boolean)
-      if (others.length < 1) return 'Add at least one other tenant wallet (2–8 tenants total).'
+      if (others.length < 1) return 'Add at least one other tenant wallet (2-8 tenants total).'
       if (others.length > 7) return 'At most 8 tenants in total.'
       for (const address of others) {
         if (!isAddress(address)) return `Invalid tenant address: ${address}`
@@ -238,7 +238,7 @@ export default function NewAgreement() {
           <h2>Tenants</h2>
           <p className="muted small">
             You are tenant 1 (<WalletAddress address={creatorWallet} copyable={false} />) and
-            cannot be removed — the creator has no special authority and pays a share like
+            cannot be removed - the creator has no special authority and pays a share like
             everyone else.
           </p>
           {tenants.map((tenant, index) => (
@@ -337,12 +337,12 @@ export default function NewAgreement() {
         <div className="card">
           <h2>The rules you are agreeing to</h2>
           <ul>
-            <li><strong>Strict-majority voting</strong> — deduction claims need more than half of the tenants to vote YES.</li>
-            <li><strong>Claim window</strong> — the recipient can submit claims only between lease end and the claim deadline.</li>
-            <li><strong>Contract custody</strong> — funds stay locked in the contract; no platform administrator can move them.</li>
-            <li><strong>Funding cancellation</strong> — if funding is incomplete at the deadline, anyone involved can cancel and every tenant reclaims their own money.</li>
-            <li><strong>Immutable terms</strong> — participants, amounts, and deadlines cannot be changed after creation. A mistake requires a new agreement.</li>
-            <li><strong>Public onchain data</strong> — wallet addresses, amounts, dates, votes, and hashes are permanently public.</li>
+            <li><strong>Strict-majority voting</strong> - deduction claims need more than half of the tenants to vote YES.</li>
+            <li><strong>Claim window</strong> - the recipient can submit claims only between lease end and the claim deadline.</li>
+            <li><strong>Contract custody</strong> - funds stay locked in the contract; no platform administrator can move them.</li>
+            <li><strong>Funding cancellation</strong> - if funding is incomplete at the deadline, anyone involved can cancel and every tenant reclaims their own money.</li>
+            <li><strong>Immutable terms</strong> - participants, amounts, and deadlines cannot be changed after creation. A mistake requires a new agreement.</li>
+            <li><strong>Public onchain data</strong> - wallet addresses, amounts, dates, votes, and hashes are permanently public.</li>
           </ul>
         </div>
       )}
@@ -359,12 +359,12 @@ export default function NewAgreement() {
                 value: (
                   <>
                     <div>
-                      <WalletAddress address={creatorWallet} copyable={false} /> — {creatorAmount}{' '}
+                      <WalletAddress address={creatorWallet} copyable={false} /> - {creatorAmount}{' '}
                       MON (you)
                     </div>
                     {tenants.map((tenant, index) => (
                       <div key={index}>
-                        <WalletAddress address={tenant.wallet} copyable={false} /> —{' '}
+                        <WalletAddress address={tenant.wallet} copyable={false} /> -{' '}
                         {tenant.amountMon} MON
                       </div>
                     ))}
@@ -373,7 +373,7 @@ export default function NewAgreement() {
               },
               {
                 label: 'Total deposit',
-                value: totalWei !== null ? <AmountDisplay wei={totalWei} /> : '—',
+                value: totalWei !== null ? <AmountDisplay wei={totalWei} /> : '-',
               },
             ]}
           />

@@ -54,7 +54,7 @@ async function cancelledFixture() {
   return context;
 }
 
-describe("SharedDepositEscrow — withdrawals and security", () => {
+describe("SharedDepositEscrow - withdrawals and security", () => {
   describe("pre-activation withdrawal", () => {
     it("lets a tenant withdraw part of its own funding with exact accounting", async () => {
       const { escrow, creator, agreementId, publicClient } =

@@ -1,6 +1,6 @@
 """Authentication service: nonces, signature verification, sessions.
 
-Raw nonces, session tokens, and CSRF values exist only in transit — the
+Raw nonces, session tokens, and CSRF values exist only in transit - the
 database stores SHA-256 hashes exclusively, and nothing here logs a raw
 value. Nonce consumption and session creation happen in one transaction with
 an atomic single-statement guard, so two concurrent verifications of the same

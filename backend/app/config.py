@@ -139,7 +139,7 @@ class Settings(BaseSettings):
 
     @property
     def safe_database_target(self) -> str:
-        """Host, port, and database name only — no credentials. Safe for logs."""
+        """Host, port, and database name only - no credentials. Safe for logs."""
         parsed = urlsplit(self.database_url.get_secret_value())
         return f"{parsed.hostname}:{parsed.port or 3306}/{self.database_name}"
 

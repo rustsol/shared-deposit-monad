@@ -18,7 +18,7 @@ def test_uses_ethereum_keccak_not_nist_sha3() -> None:
 
 
 def test_determinism() -> None:
-    reason = "Broken kitchen cabinet door — replacement required"
+    reason = "Broken kitchen cabinet door - replacement required"
     assert reason_hash(reason) == reason_hash(reason)
 
 

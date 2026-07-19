@@ -1,4 +1,4 @@
-"""auth_nonces and auth_sessions — wallet-signature authentication state.
+"""auth_nonces and auth_sessions - wallet-signature authentication state.
 
 Only SHA-256 hashes of nonces and session tokens are stored; raw values never
 touch the database. Both tables carry expiries and consumption/revocation

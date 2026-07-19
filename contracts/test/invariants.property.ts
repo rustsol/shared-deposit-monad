@@ -44,7 +44,7 @@ function randomChunk(rng: () => number, remaining: bigint): bigint {
 const SCENARIOS = 20;
 const SEED = 0xc0ffee;
 
-describe("SharedDepositEscrow — funding-lifecycle invariants (property tests)", function () {
+describe("SharedDepositEscrow - funding-lifecycle invariants (property tests)", function () {
   // Sequential randomized scenarios need more than the default mocha budget.
   this.timeout(300_000);
 
@@ -248,7 +248,7 @@ describe("SharedDepositEscrow — funding-lifecycle invariants (property tests)"
   });
 });
 
-describe("SharedDepositEscrow — full-lifecycle claim/settlement invariants (property tests)", function () {
+describe("SharedDepositEscrow - full-lifecycle claim/settlement invariants (property tests)", function () {
   this.timeout(300_000);
 
   const CLAIM_SEED = 0xbadd1ce;

@@ -1,7 +1,7 @@
 // Synchronizes the REAL compiled SharedDepositEscrow artifact into the
 // frontend and backend as deterministic generated modules. Never hand-edit
 // the outputs. `--check` fails (exit 1) when the generated files have
-// drifted from the current artifact — wired into CI so a stale ABI can never
+// drifted from the current artifact - wired into CI so a stale ABI can never
 // ship. Contains no keys and no deployment addresses (those live in
 // contracts/deployments/*.json).
 import { createHash } from "node:crypto";
@@ -20,7 +20,7 @@ const artifactPath = path.join(
 );
 
 if (!fs.existsSync(artifactPath)) {
-  console.error("artifact missing — run `npx hardhat compile` first");
+  console.error("artifact missing - run `npx hardhat compile` first");
   process.exit(1);
 }
 const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf-8"));
@@ -57,7 +57,7 @@ const backendOut = path.join(
   "shared_deposit_escrow.json"
 );
 
-const frontendContent = `// GENERATED FILE — do not edit by hand.
+const frontendContent = `// GENERATED FILE - do not edit by hand.
 // Source: contracts/artifacts (real Hardhat compile output).
 // Regenerate with: node contracts/scripts/sync-artifacts.mjs
 

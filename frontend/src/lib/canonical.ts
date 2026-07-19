@@ -1,6 +1,6 @@
 // Independent browser implementation of the canonical agreement-terms
 // serialization and Keccak-256 hash (docs/02 §4.1). It must reproduce the
-// backend byte-for-byte — agreement creation stays disabled unless the two
+// backend byte-for-byte - agreement creation stays disabled unless the two
 // hashes match exactly.
 
 import { keccak256, toHex } from 'viem'

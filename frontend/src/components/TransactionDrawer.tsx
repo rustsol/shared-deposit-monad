@@ -1,5 +1,5 @@
 // The single shared transaction drawer. Every stage is shown in plain
-// language via describeTxStatus — a wallet confirmation is never presented
+// language via describeTxStatus - a wallet confirmation is never presented
 // as a blockchain confirmation (BROADCAST_REQUESTED vs PENDING_ONCHAIN vs
 // MINED vs VERIFIED are distinct, honest stages). Retry only re-queries the
 // existing hash; Dismiss never releases a single-flight action lock.
@@ -63,7 +63,7 @@ export function TransactionDrawer() {
             )}
             {entry.error && <div className="small field-error">{entry.error}</div>}
             <div className="tx-actions">
-              {/* Retry only re-queries the existing hash — never writeContract. */}
+              {/* Retry only re-queries the existing hash - never writeContract. */}
               {entry.hash &&
                 (entry.status === 'TIMEOUT_OR_RPC_ERROR' ||
                   RESOLVING_STATUSES.includes(entry.status)) && (

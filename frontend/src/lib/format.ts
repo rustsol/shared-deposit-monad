@@ -42,7 +42,7 @@ export function fundingDeadlineWarning(
   const hours = (fundingDeadlineUnix - nowUnix) / 3600
   if (hours <= 0) return 'The funding deadline is in the past. Choose a future date and time.'
   if (hours < 24) {
-    return 'The funding deadline is less than 24 hours away. Give every participant enough time to accept and fund — a deadline at least 48 hours out is recommended.'
+    return 'The funding deadline is less than 24 hours away. Give every participant enough time to accept and fund - a deadline at least 48 hours out is recommended.'
   }
   return null
 }

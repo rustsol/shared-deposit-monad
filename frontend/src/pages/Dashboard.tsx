@@ -1,5 +1,5 @@
 // Dashboard: the signed-in wallet's drafts and onchain agreements. Statuses
-// come from direct contract reads on the backend — never the cache column.
+// come from direct contract reads on the backend - never the cache column.
 
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -67,7 +67,7 @@ export default function Dashboard() {
             </Link>
           }
         >
-          Your dashboard shows the deposits you take part in — as a tenant, creator, or deposit
+          Your dashboard shows the deposits you take part in - as a tenant, creator, or deposit
           recipient.
         </EmptyState>
       </main>
@@ -118,7 +118,7 @@ export default function Dashboard() {
 
       {data && data.drafts.length > 0 && (
         <section aria-labelledby="drafts-heading">
-          <h2 id="drafts-heading">Drafts — not onchain yet</h2>
+          <h2 id="drafts-heading">Drafts - not onchain yet</h2>
           <div className="grid-cards">
             {data.drafts.map((draft) => (
               <div className="card" key={draft.id} style={{ marginBottom: 0 }}>

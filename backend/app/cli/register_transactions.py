@@ -5,7 +5,7 @@
 One-time/operator tool: each hash is fetched from the chain BY HASH, its
 sender/target/function are taken from the transaction itself, its receipt is
 verified, and the agreement cache is refreshed from a direct contract read.
-No block scanning, no event discovery — only the hashes given on the command
+No block scanning, no event discovery - only the hashes given on the command
 line are touched. Idempotent: re-running with the same hashes changes
 nothing.
 """

@@ -166,7 +166,7 @@ describe('role resolution', () => {
     expect(matched.canAcceptAsRecipient).toBe(true)
 
     // Even during a session mismatch, the recipient connection never becomes a
-    // tenant — it just has no enabled actions until re-auth.
+    // tenant - it just has no enabled actions until re-auth.
     const mismatched = resolve(RECIPIENT, TENANT_B)
     expect(mismatched.isRecipient).toBe(true)
     expect(mismatched.isTenant).toBe(false)

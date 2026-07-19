@@ -1,7 +1,7 @@
 """Shared test fixtures.
 
 Tests run against a REAL MySQL database (never SQLite, never in-memory).
-The dedicated test database name MUST end in ``_test`` — every destructive
+The dedicated test database name MUST end in ``_test`` - every destructive
 operation is guarded by that rule, and ``shared_deposit`` itself is never
 dropped or truncated by the test suite.
 """
@@ -154,7 +154,7 @@ def db_session(test_db_engine: Engine) -> Iterator[Session]:
 @pytest.fixture
 def clean_tables(test_db_engine: Engine) -> Iterator[Engine]:
     """For tests that must commit for real (constraint tests): truncates the
-    touched tables afterwards — guarded, test database only."""
+    touched tables afterwards - guarded, test database only."""
     yield test_db_engine
     with test_db_engine.connect() as connection:
         assert_test_database_name(connection.execute(text("SELECT DATABASE()")).scalar() or "")

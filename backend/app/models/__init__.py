@@ -2,7 +2,7 @@
 
 Authoritative-data boundary: models here hold authentication, private
 metadata, drafts, invitations, and audit records. The *_index, chain_events,
-and chain_sync_state tables are event-derived caches of onchain state — the
+and chain_sync_state tables are event-derived caches of onchain state - the
 SharedDepositEscrow contract remains the only financial authority.
 """
 

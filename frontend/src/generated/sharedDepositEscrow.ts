@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit by hand.
+// GENERATED FILE - do not edit by hand.
 // Source: contracts/artifacts (real Hardhat compile output).
 // Regenerate with: node contracts/scripts/sync-artifacts.mjs
 

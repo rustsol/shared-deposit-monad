@@ -1,4 +1,4 @@
-"""invitations — private invitation-link lifecycle (MySQL-authoritative).
+"""invitations - private invitation-link lifecycle (MySQL-authoritative).
 
 Only the SHA-256 hash of the invitation token is stored; raw tokens and raw
 invitation URLs never touch the database. The schema supports the approved
@@ -32,7 +32,7 @@ class Invitation(Base):
     # SHA-256 hex of the raw token (>= 256-bit CSPRNG, generated in a later phase).
     token_hash: Mapped[str] = mapped_column(Hash64Char, nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
-    # View/join audit — not onchain acceptance; one-time-use state.
+    # View/join audit - not onchain acceptance; one-time-use state.
     used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     # Rotation/revocation support per the approved token protections.
     revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)

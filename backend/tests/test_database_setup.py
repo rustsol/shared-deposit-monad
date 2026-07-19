@@ -10,7 +10,7 @@ from tests.conftest import (
     make_test_settings,
 )
 
-# A dedicated throwaway name — the _test suffix keeps every operation guarded.
+# A dedicated throwaway name - the _test suffix keeps every operation guarded.
 SETUP_DB_URL = derive_test_db_url("setup")
 
 

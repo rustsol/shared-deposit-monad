@@ -4,7 +4,7 @@
 
 Checks ONLY hashes already stored in contract_transactions whose status is
 unresolved (SUBMITTED / BROADCAST_CONFIRMED / PENDING / MINED_SUCCESS). One
-transaction lookup and at most one receipt lookup per row — never a block
+transaction lookup and at most one receipt lookup per row - never a block
 scan, never a log range query, never a write to the chain.
 """
 

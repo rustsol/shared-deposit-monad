@@ -1,6 +1,6 @@
 """Claim-reason normalization and hashing (docs/02 §4.2).
 
-Normalization — exactly the documented steps, nothing more (user meaning is
+Normalization - exactly the documented steps, nothing more (user meaning is
 never rewritten):
 
 1. Unicode NFC normalization;

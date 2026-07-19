@@ -1,5 +1,5 @@
 """Agreement drafts: CRUD, prepare-onchain, verified confirm-onchain (with a
-mocked chain service — CI never contacts Monad Testnet), dashboard, and
+mocked chain service - CI never contacts Monad Testnet), dashboard, and
 public config. The mock mirrors the real ChainService interface; runtime uses
 the real RPC service."""
 

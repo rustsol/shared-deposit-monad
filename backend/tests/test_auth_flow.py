@@ -81,7 +81,7 @@ class TestSignInMessage:
         assert "Issued At: " in message
         assert "Expiration Time: " in message
         assert "Sign in to Shared Deposit" in message
-        # Identity only — no transaction language.
+        # Identity only - no transaction language.
         assert "approve" not in message.lower()
         assert "transfer" not in message.lower()
 

@@ -9,7 +9,7 @@ network, and must never appear in .env files or application configuration.
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-# Trivial, well-known test constants — not secrets.
+# Trivial, well-known test constants - not secrets.
 TEST_KEY_A = "0x" + "01" * 32
 TEST_KEY_B = "0x" + "02" * 32
 TEST_KEY_C = "0x" + "03" * 32

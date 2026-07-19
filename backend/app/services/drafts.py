@@ -5,7 +5,7 @@ Drafts are MySQL-authoritative only until the agreement exists onchain.
 confirm-onchain verifies the real Monad Testnet receipt and the
 AgreementCreated event, cross-checks every participant and amount against a
 direct contract read, and only then binds the draft to the chain identity.
-The creator wallet always comes from the authenticated session — never from
+The creator wallet always comes from the authenticated session - never from
 request JSON.
 """
 

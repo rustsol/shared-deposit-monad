@@ -1,5 +1,5 @@
 // Shared presentational components. Every page composes these instead of
-// re-implementing badges, addresses, amounts, deadlines, and states — so
+// re-implementing badges, addresses, amounts, deadlines, and states - so
 // role, status, amount, and address presentation stays consistent app-wide.
 // No component here holds financial logic; values arrive already exact.
 

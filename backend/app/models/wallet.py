@@ -1,4 +1,4 @@
-"""wallet_profiles — wallet identity plus optional private display metadata.
+"""wallet_profiles - wallet identity plus optional private display metadata.
 
 The wallet address is the identity key. There is deliberately no password,
 private-key, or seed-phrase column: authentication is wallet-signature based

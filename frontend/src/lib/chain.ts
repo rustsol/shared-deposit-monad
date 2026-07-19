@@ -2,8 +2,8 @@
 //
 // Multi-wallet support without RainbowKit (which currently targets wagmi v2):
 // wagmi v3's EIP-6963 discovery (on by default) surfaces every installed
-// browser-extension wallet — MetaMask, Rabby, Brave, Coinbase extension, etc.
-// — each as its own connector. We add an `injected()` fallback plus Coinbase
+// browser-extension wallet - MetaMask, Rabby, Brave, Coinbase extension, etc.
+// - each as its own connector. We add an `injected()` fallback plus Coinbase
 // Wallet and, when a WalletConnect projectId is configured, WalletConnect for
 // mobile wallets. Keys always stay inside the wallet.
 

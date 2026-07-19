@@ -185,7 +185,7 @@ def claim_invitation(
         metadata={"agreement_key": invitation.agreement_key, "role": invitation.role},
     )
     db.commit()
-    # Offchain join only — no onchain acceptance, no transaction hash.
+    # Offchain join only - no onchain acceptance, no transaction hash.
     return InvitationClaimResponse()
 
 

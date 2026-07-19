@@ -85,7 +85,7 @@ def verify_signature(
     try:
         issued = verify_and_create_session(db, settings, body.address, body.message, body.signature)
     except AuthenticationFailed as failure:
-        # Safe generic category only — never the signature, message, or nonce.
+        # Safe generic category only - never the signature, message, or nonce.
         record_audit_event(
             db,
             event_type="auth.failed",
@@ -125,7 +125,7 @@ def current_session(
     profile = db.get(WalletProfile, session.wallet_address)
     # Only the CSRF hash is stored, so a reloaded page cannot recover the old
     # raw value. Policy (documented): /me rotates the session-bound CSRF token
-    # and returns the fresh value — exactly one CSRF value is active per
+    # and returns the fresh value - exactly one CSRF value is active per
     # session at any time, and it is useless without the HttpOnly cookie,
     # which JavaScript cannot read and other origins cannot use.
     raw_csrf = secrets.token_hex(32)

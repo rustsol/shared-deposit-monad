@@ -2,7 +2,7 @@
 
 claim_index mirrors the immutable onchain Claim structure and claim events
 exactly per the approved columns in docs/02 §5.4. It must never override a
-direct contract read — hence `status_cache`.
+direct contract read - hence `status_cache`.
 """
 
 from datetime import datetime
@@ -53,7 +53,7 @@ class ClaimDraft(Base):
 
 
 class ClaimIndex(Base):
-    """Event-derived cache only — never authoritative for claim state."""
+    """Event-derived cache only - never authoritative for claim state."""
 
     __tablename__ = "claim_index"
     __table_args__ = {"mysql_charset": "utf8mb4", "mysql_engine": "InnoDB"}
@@ -69,7 +69,7 @@ class ClaimIndex(Base):
     evidence_hash: Mapped[str] = mapped_column(Hash66Char, nullable=False)
     yes_votes: Mapped[int] = mapped_column(SMALLINT(unsigned=True), nullable=False)
     no_votes: Mapped[int] = mapped_column(SMALLINT(unsigned=True), nullable=False)
-    # PENDING, APPROVED, REJECTED, WITHDRAWN — reconciled cache of contract state.
+    # PENDING, APPROVED, REJECTED, WITHDRAWN - reconciled cache of contract state.
     status_cache: Mapped[str] = mapped_column(String(16), nullable=False)
     submitted_tx_hash: Mapped[str] = mapped_column(Hash66Char, nullable=False)
     submitted_block: Mapped[int] = mapped_column(UnsignedBigInt, nullable=False)

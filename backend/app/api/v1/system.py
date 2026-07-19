@@ -3,7 +3,7 @@
 Health reports process facts only. Readiness performs live MySQL/migration
 checks always, and live RPC + contract checks outside the test environment
 (CI must never contact Monad Testnet; the response says explicitly whether
-the RPC checks ran). /config/public returns only verified public values —
+the RPC checks ran). /config/public returns only verified public values -
 the contract address appears exclusively after a verified real deployment;
 before that, deploymentStatus is honestly "missing".
 """

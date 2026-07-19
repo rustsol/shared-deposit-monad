@@ -1,4 +1,4 @@
-"""Migration round-trips, schema completeness, and structural checks —
+"""Migration round-trips, schema completeness, and structural checks -
 executed against the guarded *_test MySQL database only."""
 
 from sqlalchemy import Engine, inspect, text

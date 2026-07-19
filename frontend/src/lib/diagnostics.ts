@@ -42,7 +42,7 @@ export interface NetworkDiagnostics {
   contractCodeMatches: boolean
   safeReadMatches: boolean
   // ---- Identity (who is connected vs who is signed in) --------------------
-  // A mismatch here is an ACCOUNT problem to be fixed by re-authenticating —
+  // A mismatch here is an ACCOUNT problem to be fixed by re-authenticating -
   // it is NOT a network/RPC fault and must never be reported as one.
   walletMatchesSession: boolean
   walletClientMatches: boolean
@@ -77,7 +77,7 @@ export interface EvaluateOptions {
   walletClientAccount?: string | null
   requiredRecipient?: string | null
   /** Minimum balance (wei) needed for estimated gas. Checked against the
-   *  APPLICATION RPC balance only — a wallet-provider read failure never
+   *  APPLICATION RPC balance only - a wallet-provider read failure never
    *  blocks the action. */
   minBalanceWei?: bigint
 }
@@ -91,8 +91,8 @@ const norm = (value: string | null | undefined): string | null =>
  * Network readiness and identity are evaluated SEPARATELY. Network readiness
  * requires only genuinely necessary facts: both chains are 10143, the
  * application RPC returns a block, and the deployed contract is visible through
- * the application RPC. Optional injected-provider reads — nonce, wallet
- * balance, wallet-side block/code, exact block/balance parity — are diagnostic
+ * the application RPC. Optional injected-provider reads - nonce, wallet
+ * balance, wallet-side block/code, exact block/balance parity - are diagnostic
  * only and never block a write. Identity (connected == signed-in == wallet
  * client) is an account concern handled by re-authentication, not the network.
  */
@@ -133,7 +133,7 @@ export function evaluateHealth(
 
   const walletMatchesSession = Boolean(connected && auth && connected === auth)
   // Unknown wallet-client account (some connectors don't expose it) is not a
-  // mismatch — only a definite disagreement counts.
+  // mismatch - only a definite disagreement counts.
   const walletClientMatches =
     walletClient === null || connected === null || walletClient === connected
 

@@ -65,11 +65,11 @@ export default function DeveloperNetwork() {
       </p>
       <div className="card small">
         <dl className="kv">
-          <dt>Environment</dt><dd>{config.data?.environment ?? '—'}</dd>
-          <dt>Configured chain</dt><dd>{config.data?.chain_id ?? '—'}</dd>
-          <dt>Application RPC</dt><dd className="mono">{config.data?.rpc_url ?? '—'}</dd>
-          <dt>Contract</dt><dd className="mono">{config.data?.contract_address ?? '—'}</dd>
-          <dt>Deployment</dt><dd>{config.data?.deployment_status ?? '—'}</dd>
+          <dt>Environment</dt><dd>{config.data?.environment ?? '-'}</dd>
+          <dt>Configured chain</dt><dd>{config.data?.chain_id ?? '-'}</dd>
+          <dt>Application RPC</dt><dd className="mono">{config.data?.rpc_url ?? '-'}</dd>
+          <dt>Contract</dt><dd className="mono">{config.data?.contract_address ?? '-'}</dd>
+          <dt>Deployment</dt><dd>{config.data?.deployment_status ?? '-'}</dd>
         </dl>
       </div>
       <NetworkDiagnosticsPanel data={data} loading={loading} recheck={recheck} />

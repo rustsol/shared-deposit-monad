@@ -2,7 +2,7 @@
 
 Decodes exactly two things, both against the real compiled ABI (never
 hand-written): the events inside one transaction receipt, and the function
-call encoded in one transaction's input data. There is no log scanning here —
+call encoded in one transaction's input data. There is no log scanning here -
 the only inputs are a receipt or a transaction that the application already
 holds by hash.
 
@@ -131,7 +131,7 @@ def decode_receipt_events(
 ) -> list[dict[str, Any]]:
     """JSON-safe decoded events from ONE transaction receipt, restricted to
     the given contract. Logs from any other address are ignored, undecodable
-    topics are skipped — nothing is ever invented."""
+    topics are skipped - nothing is ever invented."""
     contract = contract_address.lower()
     decoded: list[dict[str, Any]] = []
     for raw in receipt_logs:

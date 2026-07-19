@@ -147,7 +147,7 @@ async function finalizeAndVerify(
   return { refundSum, payout: agreement.totalApprovedClaims };
 }
 
-describe("SharedDepositEscrow — settlement and finalized withdrawals", () => {
+describe("SharedDepositEscrow - settlement and finalized withdrawals", () => {
   describe("agreement finalization", () => {
     async function activePastLeaseFixture() {
       const context = await deployEscrowFixture();

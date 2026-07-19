@@ -6,10 +6,9 @@ contract-state refresh. Access rules: a transaction row belongs to the
 authenticated wallet that recorded it; agreement-level listings are gated to
 agreement participants; nothing here ever signs or broadcasts.
 
-MVP limitation (documented in docs/BUILD_LOG.md and the agreement page):
-transactions made OUTSIDE this application update current agreement state
-through direct contract reads on page load, but they do not appear
-automatically in the stored activity timeline.
+MVP limitation: transactions made OUTSIDE this application update current
+agreement state through direct contract reads on page load, but they do not
+appear automatically in the stored activity timeline.
 """
 
 from datetime import datetime

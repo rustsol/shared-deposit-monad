@@ -2,7 +2,7 @@
 
 An invitation only grants the expected authenticated wallet offchain access
 to its private draft/review context. It NEVER performs or records onchain
-acceptance — that happens later through a real wallet transaction. Raw tokens
+acceptance - that happens later through a real wallet transaction. Raw tokens
 exist once, in the creation/rotation response; the database stores hashes.
 
 States: active → used (claimed once) | revoked | rotated (revoked_at +
@@ -123,7 +123,7 @@ def create_invitation(
 ) -> CreatedInvitation:
     """Creates one invitation for one documented participant slot. Policy for
     duplicates: creating while an active invitation exists for the same
-    draft/wallet/role is rejected (409) — rotation is the explicit way to
+    draft/wallet/role is rejected (409) - rotation is the explicit way to
     replace a live token, so two usable tokens never coexist."""
     if draft.creator_address != caller_wallet:
         raise InvitationError(403, "only the draft creator can manage invitations")
