@@ -37,7 +37,22 @@ backend/storage/evidence/*
 
 # Databases and dumps
 *.sqlite
+*.sql
 *.sql.gz
+
+# Local outputs (never committed)
+exports/
+demo-video/
+*.zip
+*.mp4
+*.mov
+*.wav
+# Local documentation archives created during repository cleanup
+shared-deposit-monad-docs-archive-*/
+# Temporary audit / scratch files
+*audit*.json
+scratch/
+tmp/
 
 # IDE and OS
 .vscode/

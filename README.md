@@ -1,60 +1,295 @@
 # Shared Deposit
 
-A wallet-based rental security-deposit escrow on **Monad Testnet**, built for the Spark hackathon on BuildAnything.
+[![CI](https://github.com/rustsol/shared-deposit-monad/actions/workflows/ci.yml/badge.svg)](https://github.com/rustsol/shared-deposit-monad/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## The problem
+A wallet-based rental deposit escrow application built on Monad.
 
-Shared rental deposits are usually held by one roommate or the landlord and tracked through messages or spreadsheets. Roommates cannot easily prove who funded what, review why deductions were made, or ensure the final refund follows the rules everyone agreed to.
+Roommates or tenants contribute to one shared security deposit. Each participant
+uses their own wallet, and a smart contract holds and accounts for the funds
+instead of one roommate or a landlord. Every contribution, acceptance, and
+deposit is a real on-chain transaction signed by the participant.
 
-## The solution
+The smart contract is the source of truth for money: custody, funding, claims,
+voting, settlement, and withdrawals all follow its rules. A FastAPI backend and
+MySQL store private metadata and a verified record of application transactions.
+The backend never holds user private keys and never signs transactions for
+users.
 
-Shared Deposit locks each tenant's contribution in a Monad smart contract:
+![Landing page](.github/assets/landing.png)
 
-1. **Create** — one tenant creates an agreement for 2–8 tenant wallets and one deposit-recipient wallet, with fixed dates, contributions, and voting rules. Every participant accepts the same immutable canonical terms hash onchain.
-2. **Fund** — each tenant funds their exact share in native MON. The agreement activates automatically when everyone has accepted and fully funded. If the funding deadline is missed, anyone can cancel and every tenant withdraws their own money back.
-3. **Claim** — after the lease ends, the deposit recipient may submit deduction claims. Every claim requires an amount, a reason hash, and an evidence-manifest hash (PNG/JPEG/PDF evidence stored offchain, content-addressed by SHA-256).
-4. **Vote** — tenants vote YES/NO on each claim. A strict majority (`floor(tenantCount / 2) + 1`) approves; claims that cannot reach the threshold are rejected. Votes are immutable.
-5. **Settle** — the contract deterministically calculates the recipient payout and every tenant refund (individual deductions first, then shared deductions allocated proportionally with a largest-remainder rounding method). Everyone withdraws their own amount; no one else can move it.
+![Active agreement](.github/assets/agreement.png)
 
-## Roles
+## Status
 
-- **Tenant** — accepts terms, funds their share, votes on claims, withdraws their refund.
-- **Deposit recipient** (landlord or property manager) — accepts the same terms, submits evidence-backed claims after lease end, withdraws only approved deductions. Wallet only; no profile, KYC, or property registration.
-- **Creator** — one of the tenants; prepares and submits the agreement, with no special power afterward.
+This is an MVP running on Monad Testnet.
+
+| Item | Value |
+| --- | --- |
+| Network | Monad Testnet |
+| Chain ID | 10143 |
+| Escrow contract | `0x5720c3f77c66527b59f9f63cd3631a3019400910` |
+| Stage | Testnet MVP, not production |
+
+The escrow contract is deployed and source-verified. The application supports
+the full funding lifecycle end to end. Later lifecycle screens are listed under
+Roadmap.
+
+## What works today
+
+- Wallet connection and Sign-In with Ethereum (EIP-4361) authentication.
+- Agreement creation with 2 to 8 tenant wallets and one separate recipient wallet.
+- Per-tenant contribution amounts, funding deadline, and lease dates.
+- Tenant acceptance and recipient acceptance on-chain.
+- Deposit funding in native MON, with automatic activation once every tenant has
+  accepted and fully funded.
+- Pre-activation withdrawal and funding-expiry cancellation.
+- Transaction persistence in MySQL, receipt verification, and a direct
+  contract-state refresh after each write.
+- A verified per-agreement activity history built from stored transactions.
+- Role-aware actions (creator, tenant, recipient) derived from the connected wallet.
+- Read-only Claims and Settlement views read directly from the contract.
+- Responsive interface tested at common desktop and mobile widths.
+
+The smart contract also implements deduction claims, tenant voting, settlement,
+and withdrawals. Those actions are enforced on-chain and shown as read-only in
+the app today. The write interfaces for them are on the Roadmap.
+
+## How it works
+
+1. A tenant creates the agreement with the participants, amounts, and dates.
+2. Participants connect and sign in with their wallets.
+3. Each tenant accepts the terms and deposits their required amount.
+4. The recipient accepts the terms.
+5. The contract activates automatically when all tenants have accepted and funded.
+6. Later lifecycle actions (claims, voting, settlement, withdrawals) follow the
+   contract rules.
 
 ## Architecture
 
-| Layer | Technology | Responsibility |
-|---|---|---|
-| Smart contract | Solidity + Hardhat + OpenZeppelin | **Financial source of truth**: custody, acceptance, funding, claims, voting, settlement, pull withdrawals |
-| Backend | Python, FastAPI, SQLAlchemy 2, Alembic | Wallet-signature auth, canonical terms hashing, evidence storage, finalized-event indexing |
-| Database | MySQL (local WAMP in development) | **Private metadata and indexed cache only** — never authoritative for balances, approvals, refunds, or withdrawals |
-| Frontend | React, TypeScript, Vite, Wagmi, Viem | Wallet-signed transactions and direct contract reads |
+```mermaid
+flowchart LR
+  W["User wallet<br/>(MetaMask / Rabby)"] --> F["React frontend"]
+  F --> B["FastAPI backend<br/>+ MySQL"]
+  F --> C["Monad smart contract"]
+  B --> C
+```
 
-The contract has no owner, no platform fee, no upgrade proxy, and no admin path that can move funds. Private information (names, addresses, reason text, receipts) stays offchain; only deterministic hashes go onchain.
+- The wallet signs every transaction. The backend never signs for the user.
+- The smart contract stores the authoritative financial state.
+- MySQL stores application metadata, authentication data, cached state, and a
+  verified record of transactions made through the app.
 
-## No fake data policy
+Page loads read financial state directly from the contract. The stored cache is
+treated as a cache: if it disagrees with a direct read, the backend refreshes it.
 
-The application never shows a success state without a real transaction receipt and the expected contract event or state. There is no seeded production data, no placeholder transaction hashes, no simulated blockchain results, and no fallback sample data when RPC or API calls fail.
+## Technology
 
-## Documentation
+| Layer | Tools |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, Wagmi, Viem |
+| Backend | Python, FastAPI, SQLAlchemy, Alembic, MySQL |
+| Contracts | Solidity, Hardhat, OpenZeppelin |
+| Blockchain | Monad Testnet |
+| Tests | Vitest (frontend), pytest (backend), Hardhat (contracts) |
 
-- [Build pack overview](docs/00_README.md)
-- [Scope document](docs/01_SCOPE_DOCUMENT.md)
-- [Technical design](docs/02_TECHNICAL_DESIGN.md)
-- [Implementation plan](docs/03_IMPLEMENTATION_PLAN.md)
-- [User guide](docs/04_USER_GUIDE.md)
-- [UI/UX design guide](docs/05_UI_UX_DESIGN_GUIDE.md)
-- [Claude Code master prompt](docs/06_CLAUDE_CODE_MASTER_PROMPT.md)
+## Repository layout
 
-## Project status
+```
+backend/     FastAPI service, SQLAlchemy models, Alembic migrations, tests
+frontend/    React + Vite application and tests
+contracts/   Solidity escrow, Hardhat config, tests, deployment metadata
+scripts/     PowerShell helpers for local setup and running
+```
 
-**The smart contract is functionally complete for the documented MVP and tested locally.** `SharedDepositEscrow` covers the full lifecycle: agreement creation, terms acceptance, funding with automatic activation, pre-activation withdrawal, funding-expiry cancellation with historical accounting, recipient deduction claims (shared and individual, hash-only evidence references, 32-claim lifetime limit), immutable tenant voting with immediate mathematical resolution, post-deadline claim finalization, deterministic settlement using the largest-remainder allocation, and reentrancy-safe pull withdrawals for tenant refunds and the recipient payout — verified by 135 passing Hardhat tests (boundary, security, forced-MON, and seeded randomized invariant tests) against local test signers only.
+## Prerequisites
 
-**Backend foundation and security layer implemented:** validated configuration, all 15 documented MySQL tables under Alembic migrations (real WAMP MySQL locally, `mysql:8.4` service in CI), health/readiness endpoints, canonical Keccak-256 hashing (golden vectors reproduced via viem), and now full **wallet-signature authentication (EIP-4361)** with one-time nonces, hash-only session storage, HttpOnly cookies, session-bound CSRF protection, rate limiting, safe audit logging, and the complete **invitation-token lifecycle** (create/review/claim/rotate/revoke, 256-bit tokens, one-time semantics, log redaction). Invitations grant offchain draft access only — onchain acceptance always remains a real wallet transaction. See [backend/README.md](backend/README.md).
+- Git
+- Python 3.11 or newer
+- Node.js 20 or newer, with npm
+- MySQL 8.0 or newer (or MariaDB 10.6 or newer)
+- A browser wallet such as MetaMask or Rabby
+- A small amount of Monad Testnet MON for gas
 
-Not implemented yet: evidence upload, agreement/claim APIs, the chain-event indexer, frontend product flows (no login UI exists), and any deployment. **The contract is not deployed to any network and no real wallet keys exist in this repository** (deterministic test-only signature fixtures live under `backend/tests/fixtures/`). Implementation follows the phased plan in [docs/03_IMPLEMENTATION_PLAN.md](docs/03_IMPLEMENTATION_PLAN.md).
+A deployment private key is not required to run the application against the
+existing deployment.
+
+## Local installation
+
+Commands below use Windows PowerShell. A note for macOS and Linux follows where
+a command differs.
+
+Clone the repository:
+
+```powershell
+git clone https://github.com/rustsol/shared-deposit-monad.git
+cd shared-deposit-monad
+```
+
+### Database
+
+Create the database (adjust the user and password to your local MySQL):
+
+```powershell
+mysql -h 127.0.0.1 -P 3306 -u root -p -e "CREATE DATABASE shared_deposit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+```
+
+### Backend
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+Edit `backend\.env` and set `DATABASE_URL` to your local MySQL, and set a fresh
+`SESSION_SECRET`. Generate one with:
+
+```powershell
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### Frontend
+
+```powershell
+cd ..\frontend
+npm install
+```
+
+If dependency resolution stalls, run `npm install --legacy-peer-deps`.
+
+No frontend `.env` is required for local development. The Vite dev server proxies
+`/api` to the backend so session cookies stay same-origin.
+
+### Contracts (optional)
+
+The contract is already deployed, so this is only needed to compile or run the
+contract tests.
+
+```powershell
+cd ..\contracts
+npm install
+npx hardhat compile
+```
+
+On macOS or Linux, replace `.\.venv\Scripts\python.exe` with
+`./.venv/bin/python` and `Copy-Item` with `cp`.
+
+## Environment configuration
+
+Backend configuration lives in `backend\.env` (never committed). See
+`backend\.env.example` for the full list.
+
+Public values (safe to keep as shipped):
+
+- `CHAIN_ID` = 10143
+- `RPC_URL` = https://testnet-rpc.monad.xyz
+- Escrow contract address (from `contracts/deployments/monad-testnet.json`)
+- `FRONTEND_ORIGIN` = http://localhost:5173
+
+Private values you set yourself:
+
+- `DATABASE_URL` (contains your local database password)
+- `SESSION_SECRET` (generate a fresh value, see above)
+
+Generate your own local secrets. Never place a wallet seed phrase or private key
+in the repository or in any committed `.env` file.
+
+## Running the application
+
+Backend (from `backend`):
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Frontend (from `frontend`):
+
+```powershell
+npm run dev
+```
+
+Local URLs:
+
+- Frontend: http://localhost:5173
+- Backend API docs: http://127.0.0.1:8000/docs
+- Backend readiness: http://127.0.0.1:8000/api/v1/readiness
+- Network diagnostics (development only): http://localhost:5173/developer/network
+
+## Running tests
+
+Backend (from `backend`):
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy
+```
+
+Frontend (from `frontend`):
+
+```powershell
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+Contracts (from `contracts`):
+
+```powershell
+npx hardhat test
+```
+
+Backend tests run against a real MySQL server. They create and drop guarded
+databases whose names end in `_test` and never touch `shared_deposit`.
+
+## Smart contract
+
+- Network: Monad Testnet (chain ID 10143)
+- Address: `0x5720c3f77c66527b59f9f63cd3631a3019400910`
+- Explorer: https://testnet.monadscan.com/address/0x5720c3f77c66527b59f9f63cd3631a3019400910
+- The deployed source is verified. This deployment is for testing.
+
+The contract has no owner, no platform fee, and no admin path that can move
+funds. It has not had a formal external security audit.
+
+## Security model
+
+- Users sign every transaction through their own wallets.
+- The backend does not custody funds and does not store wallet private keys.
+- The smart contract is the source of truth for financial state.
+- MySQL stores application metadata, authentication data, cached state, and a
+  verified record of application transactions.
+
+This is a testnet MVP. It does not claim complete security.
+
+## Known limitations
+
+- Monad Testnet only. There is no production hosting configuration in this repository.
+- Transactions submitted outside the application update on-chain state, and the
+  app reads that state directly, but they do not appear in the stored activity
+  history.
+- Claims, voting, settlement, and withdrawal write interfaces are not finished
+  in the app. The contract enforces them and the app shows them read-only.
+- The contract has not had a formal external security audit.
+
+## Roadmap
+
+- Claims and evidence submission interface
+- Tenant voting interface
+- Settlement and finalization interface
+- Refund and payout withdrawals in the app
+- Production deployment
+- External security review
+
+## Contributing
+
+Issues and pull requests are welcome. Please run the backend, frontend, and
+contract tests before opening a pull request.
 
 ## License
 
-[MIT](LICENSE)
+Released under the MIT License. See [LICENSE](LICENSE).
